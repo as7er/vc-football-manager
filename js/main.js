@@ -2598,3 +2598,36 @@ window.addEventListener("vc-prefs-change", () => {
 });
 initStart();
 
+/**
+ * 刷新页面后自动读档：有当前槽存档则直接进主界面
+ * （否则每次刷新都会停在开始页，像「没记住进度」）
+ * URL 加 ?menu=1 可强制停在开始页（例如要换档 / 导出）
+ */
+function tryAutoResume() {
+  try {
+    const params = new URLSearchParams(location.search || "");
+    if (params.get("menu") === "1" || params.get("noload") === "1") return false;
+    // session 内主动回菜单：同一会话刷新仍自动读；仅当带 menu=1 时停菜单
+    const slot = getActiveSlot();
+    if (!hasSave(slot)) return false;
+    const data = loadGame(slot);
+    if (!data) return false;
+    world = data;
+    migrateWorld(world);
+    enterMain();
+    // 轻提示，避免误以为还在登录页
+    const msg =
+      getLang() === "en"
+        ? `Resumed slot ${slot}`
+        : `已自动读取槽 ${slot}`;
+    // enterMain 后 start 屏已隐藏，toast 仍可用
+    setTimeout(() => toast(msg), 80);
+    return true;
+  } catch (err) {
+    console.error("auto-resume failed", err);
+    return false;
+  }
+}
+
+tryAutoResume();
+

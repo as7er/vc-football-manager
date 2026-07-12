@@ -1559,10 +1559,48 @@ html[data-theme="light"] .mp-card-bar { background: rgba(0, 0, 0, 0.08); }
 }
 .board-box .board-title { font-weight: 600; margin-bottom: 0.2rem; }
 .board-box .board-meta { color: var(--board-meta); font-size: 0.85rem; }
-.board-box.ok { border-color: color-mix(in srgb, var(--good) 45%, transparent); }
-.board-box.warn { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
-.board-box.danger { border-color: color-mix(in srgb, var(--bad) 55%, transparent); }
-.board-box.done { border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+.board-box.ok {
+  border-color: color-mix(in srgb, var(--good) 50%, var(--border));
+  background: color-mix(in srgb, var(--good) 10%, var(--board-bg));
+}
+.board-box.warn {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--border));
+  background: color-mix(in srgb, var(--warn) 10%, var(--board-bg));
+}
+.board-box.danger {
+  border-color: color-mix(in srgb, var(--bad) 55%, var(--border));
+  background: color-mix(in srgb, var(--bad) 10%, var(--board-bg));
+}
+.board-box.done {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--board-bg));
+}
+/* 日间：强制浅色底，避免旧缓存/遗留深色规则 */
+html[data-theme="light"] .board-box {
+  background: #eef3fb !important;
+  border-color: #c5d0e3 !important;
+  color: #1a2438 !important;
+}
+html[data-theme="light"] .board-box.ok {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+  color: #14532d !important;
+}
+html[data-theme="light"] .board-box.warn {
+  background: #fffbeb !important;
+  border-color: #fcd34d !important;
+  color: #78350f !important;
+}
+html[data-theme="light"] .board-box.danger {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #7f1d1d !important;
+}
+html[data-theme="light"] .board-box.done {
+  background: #eff6ff !important;
+  border-color: #93c5fd !important;
+  color: #1e3a8a !important;
+}
 .scout-range { color: var(--muted); font-size: 0.85em; }
 
 .transfer-window-box {

@@ -37,14 +37,23 @@
 ### 主要系统
 
 - **联赛**：超联 / 甲级 / 乙级，升降级 + **VCFM 杯**  
-- **比赛**：情境（天气/德比）、细事件、中场干预、2D 俯视球场（镜头跟随、射门轨迹、点球员看卡）  
+- **俱乐部浏览器**：积分榜 / 赛程 / 数据榜点队名，或「俱乐部」页筛选搜索；详情含排名、近况、阵容前 16、赛程与荣誉  
+- **比赛日（FM 风格 2D）**  
+  - 广播计分板：球衣色、分列比分、时钟、PRE / LIVE / HT / FT  
+  - 实时 **xG / 控球 / 射门** 条  
+  - 左球场 + 右评论流（按分钟着色）  
+  - 俯视球场：割草纹、镜头跟随、射门轨迹、压迫线 / 防线  
+  - **热区**、持球高亮、**传球网络**（可开关，主/客筛选）  
+  - 点场上球员看属性卡  
 - **纪律**：累计黄牌停赛、红牌停赛；赛前简报；60'/75' 教练提示  
-- **阵容**：体能、士气、伤病、潜力、球衣号码、自动阵容  
+- **阵容**：体能、士气、伤病、潜力、球衣号、自动阵容；**本赛季出场 / 进球·零封 / 助攻·失球**  
+- **姓名生成**：按国籍拼音 / 罗马字（中日韩等），短名按姓显示  
+- **球员资料**：阵容、青训、数据榜、转会、战术板、训练条、赛后射手等处 **点名字** 即可打开详情  
 - **设施**：球场 / 训练 / 青训等级升级  
 - **转会**：夏窗·冬窗、合同谈判（年限/周薪）、球探报告、AI 挖角报价  
 - **经营**：董事会目标与解雇压力、职员、训练日程、周薪与设施维护  
 - **生涯**：经理战绩、赛季结算页、俱乐部荣誉墙、球员分赛季历史与个人荣誉  
-- **存档**：多槽、自动存、导出提醒（约 7 天未导出会提示）
+- **存档**：多槽、自动存、刷新后自动恢复当前槽、导出提醒（约 7 天未导出会提示）
 
 ### 本地运行
 
@@ -111,14 +120,23 @@ Repo: https://github.com/as7er/vcfm
 ### Features
 
 - **Leagues**: three tiers with promotion/relegation + **VCFM Cup**  
-- **Matches**: context (weather/derbies), detailed events, half-time orders, 2D pitch (camera follow, shot trails, click player cards)  
+- **Club browser**: click club names on the table / fixtures / stats, or use the **Clubs** tab (filter & search). Detail modal: standings, form, top squad, fixtures, honours  
+- **Matchday (FM-style 2D)**  
+  - Broadcast scoreboard: kit colours, split score, clock, PRE / LIVE / HT / FT  
+  - Live **xG / possession / shots** bars  
+  - Pitch + timed commentary feed  
+  - Top-down pitch: mow stripes, camera follow, shot trails, press / defensive lines  
+  - **Heat map**, ball-carrier glow, **pass network** (toggle; home/away filter)  
+  - Click players for attribute cards  
 - **Discipline**: yellow accumulation bans, reds; pre-match briefing; 60'/75' coach tips  
-- **Squad**: fitness, morale, injury, potential, kit numbers, auto XI  
+- **Squad**: fitness, morale, injury, potential, shirt numbers, auto XI; **season apps / goals·CS / assists·GA**  
+- **Names**: nationality-based pools (pinyin / romaji for CHN/JPN/KOR, etc.); short labels use surnames  
+- **Player profiles**: click names on squad, youth, stats, transfers, tactics pitch, training bar, match scorers, etc.  
 - **Facilities**: stadium / training / youth upgrades  
 - **Transfers**: summer & winter windows, contract negotiation (years/wages), scout reports, AI poaching bids  
 - **Club**: board objectives & sack risk, staff, training schedule, wages & upkeep  
-- **Career**: manager record, season review screen, club honours wall, player season history & individual awards  
-- **Saves**: multi-slot, autosave, export reminder (~7 days)
+- **Career**: manager record, season review, club honours, player season history & awards  
+- **Saves**: multi-slot, autosave, auto-resume on refresh, export reminder (~7 days)
 
 ### Run locally
 

@@ -89,29 +89,31 @@ export class MatchView {
     wrap.className = "mp-wrap";
 
     wrap.innerHTML = `
-      <div class="mp-boards">
-        <span>VCFM LEAGUE</span><span>2D PITCH</span><span>LIVE</span><span>VCFM</span>
+      <div class="mp-boards" aria-hidden="true">
+        <span>VCFM</span><span>STADIUM</span><span>MATCHDAY</span><span>LIVE FEED</span>
       </div>
       <div class="mp-field" id="mp-field">
         <div class="mp-camera" id="mp-camera">
           <div class="mp-grass"></div>
           <svg class="mp-lines" viewBox="0 0 100 150" preserveAspectRatio="none" aria-hidden="true">
-            <rect x="2" y="2" width="96" height="146" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.6"/>
-            <line x1="2" y1="75" x2="98" y2="75" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <circle cx="50" cy="75" r="10" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <circle cx="50" cy="75" r="0.8" fill="rgba(255,255,255,0.55)"/>
-            <rect x="22" y="118" width="56" height="30" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <rect x="34" y="132" width="32" height="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <path d="M 38 118 A 12 12 0 0 1 62 118" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.45"/>
-            <circle cx="50" cy="128" r="0.6" fill="rgba(255,255,255,0.5)"/>
-            <rect x="22" y="2" width="56" height="30" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <rect x="34" y="2" width="32" height="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-            <path d="M 38 32 A 12 12 0 0 0 62 32" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.45"/>
-            <circle cx="50" cy="22" r="0.6" fill="rgba(255,255,255,0.5)"/>
-            <path d="M 2 6 A 4 4 0 0 0 6 2" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.4"/>
-            <path d="M 94 2 A 4 4 0 0 0 98 6" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.4"/>
-            <path d="M 2 144 A 4 4 0 0 1 6 148" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.4"/>
-            <path d="M 94 148 A 4 4 0 0 1 98 144" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="0.4"/>
+            <rect x="2.5" y="2.5" width="95" height="145" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.55"/>
+            <line x1="2.5" y1="75" x2="97.5" y2="75" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <circle cx="50" cy="75" r="11" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <circle cx="50" cy="75" r="0.7" fill="rgba(255,255,255,0.65)"/>
+            <rect x="20" y="116" width="60" height="31.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <rect x="32" y="130" width="36" height="17.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <path d="M 36 116 A 14 14 0 0 1 64 116" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.4"/>
+            <circle cx="50" cy="126.5" r="0.55" fill="rgba(255,255,255,0.55)"/>
+            <rect x="42" y="145" width="16" height="2.5" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.4"/>
+            <rect x="20" y="2.5" width="60" height="31.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <rect x="32" y="2.5" width="36" height="17.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
+            <path d="M 36 34 A 14 14 0 0 0 64 34" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.4"/>
+            <circle cx="50" cy="23.5" r="0.55" fill="rgba(255,255,255,0.55)"/>
+            <rect x="42" y="2.5" width="16" height="2.5" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.4"/>
+            <path d="M 2.5 6.5 A 4 4 0 0 0 6.5 2.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
+            <path d="M 93.5 2.5 A 4 4 0 0 0 97.5 6.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
+            <path d="M 2.5 143.5 A 4 4 0 0 1 6.5 147.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
+            <path d="M 93.5 147.5 A 4 4 0 0 1 97.5 143.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
           </svg>
           <svg class="mp-trails" id="mp-trails" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="mp-actors" id="mp-actors"></div>
@@ -123,7 +125,7 @@ export class MatchView {
       </div>
       <div class="mp-legend">
         <span class="mp-leg home"><i></i><em id="mp-leg-home"></em></span>
-        <span class="mp-leg-hint" id="mp-leg-hint">点球员看属性</span>
+        <span class="mp-leg-hint" id="mp-leg-hint">点击号码查看</span>
         <span class="mp-leg away"><i></i><em id="mp-leg-away"></em></span>
       </div>
     `;

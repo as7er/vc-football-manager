@@ -599,21 +599,48 @@
       </main>
     </section>
 
-    <!-- 比赛界面 -->
+    <!-- 比赛界面 · FM 风格 Matchday -->
     <section id="screen-match" class="screen">
-      <div class="match-layout">
-        <header class="match-header">
-          <div id="match-home" class="team-side"></div>
-          <div class="scoreboard">
-            <div id="match-score" class="score">0 - 0</div>
-            <div id="match-minute" class="minute">0'</div>
-            <div id="match-context" class="match-context"></div>
+      <div class="match-layout fm-match">
+        <!-- 广播计分板 -->
+        <header class="fm-scoreboard" id="match-header">
+          <div class="fm-sb-side home">
+            <span class="fm-sb-kit" id="match-home-kit"></span>
+            <div class="fm-sb-team">
+              <div id="match-home" class="fm-sb-name">—</div>
+              <div id="match-home-short" class="fm-sb-short muted"></div>
+            </div>
+            <div id="match-home-score" class="fm-sb-score">0</div>
           </div>
-          <div id="match-away" class="team-side right"></div>
+          <div class="fm-sb-center">
+            <div id="match-context" class="fm-sb-comp">—</div>
+            <div id="match-minute" class="fm-sb-clock">0'</div>
+            <div id="match-score" class="fm-sb-scoreline hidden" aria-hidden="true">0 - 0</div>
+            <div class="fm-sb-live"><span class="fm-live-dot"></span> LIVE</div>
+          </div>
+          <div class="fm-sb-side away">
+            <div id="match-away-score" class="fm-sb-score">0</div>
+            <div class="fm-sb-team">
+              <div id="match-away" class="fm-sb-name">—</div>
+              <div id="match-away-short" class="fm-sb-short muted"></div>
+            </div>
+            <span class="fm-sb-kit" id="match-away-kit"></span>
+          </div>
         </header>
-        <!-- FM 风格 2D 俯视球场 -->
-        <div id="match-pitch-root" class="match-pitch-root" aria-label="2D match view"></div>
-        <div id="match-log" class="match-log"></div>
+
+        <!-- 主区：球场 + 评论 -->
+        <div class="fm-match-body">
+          <div class="fm-pitch-col">
+            <div id="match-pitch-root" class="match-pitch-root" aria-label="2D match view"></div>
+          </div>
+          <aside class="fm-commentary" aria-label="match commentary">
+            <div class="fm-com-head">
+              <span data-i18n="match.commentary">实时评论</span>
+              <span class="fm-com-badge" id="match-com-badge">PRE</span>
+            </div>
+            <div id="match-log" class="match-log fm-com-log"></div>
+          </aside>
+        </div>
 
         <div id="match-ht-panel" class="match-ht-panel hidden">
           <h3 data-i18n="match.htTitle">中场休息 · 调整</h3>
@@ -658,18 +685,20 @@
 
         <div id="match-report" class="match-report hidden"></div>
 
-        <div class="match-speed-bar" role="group" aria-label="match speed">
-          <span class="muted" data-i18n="match.speed">倍速</span>
-          <button type="button" class="btn small" data-match-speed="1">×1</button>
-          <button type="button" class="btn small" data-match-speed="2">×2</button>
-          <button type="button" class="btn small" data-match-speed="4">×4</button>
-        </div>
-        <div class="match-actions" id="match-main-actions">
-          <button id="btn-sim-fast" class="btn primary" data-i18n="match.fast">快速模拟（中场可调）</button>
-          <button id="btn-sim-live" class="btn" data-i18n="match.live">直播（中场可调）</button>
-          <button id="btn-sim-instant" class="btn" data-i18n="match.instant">一键完赛</button>
-          <button id="btn-match-continue" class="btn" disabled data-i18n="match.continue">赛后继续</button>
-        </div>
+        <footer class="fm-match-bar">
+          <div class="match-speed-bar" role="group" aria-label="match speed">
+            <span class="muted" data-i18n="match.speed">倍速</span>
+            <button type="button" class="btn small" data-match-speed="1">×1</button>
+            <button type="button" class="btn small" data-match-speed="2">×2</button>
+            <button type="button" class="btn small" data-match-speed="4">×4</button>
+          </div>
+          <div class="match-actions" id="match-main-actions">
+            <button id="btn-sim-fast" class="btn primary" data-i18n="match.fast">快速模拟（中场可调）</button>
+            <button id="btn-sim-live" class="btn" data-i18n="match.live">直播（中场可调）</button>
+            <button id="btn-sim-instant" class="btn" data-i18n="match.instant">一键完赛</button>
+            <button id="btn-match-continue" class="btn" disabled data-i18n="match.continue">赛后继续</button>
+          </div>
+        </footer>
       </div>
     </section>
 

@@ -2285,12 +2285,10 @@ function openMatch() {
   const home = world.clubs.find((c) => c.id === next.home);
   const away = world.clubs.find((c) => c.id === next.away);
   const user = getUserClub(world);
-  $("#match-home").textContent = home.name;
-  $("#match-away").textContent = away.name;
-  $("#match-score").textContent = "0 - 0";
-  $("#match-minute").textContent = "0'";
-  const ctx = $("#match-context");
-  if (ctx) ctx.textContent = next.competition === "cup" ? next.roundLabel || t("match.cup") : t("match.leagueRound", { n: next.round || "?" });
+  setupMatchScoreboard(home, away, next);
+  setMatchScore(0, 0);
+  setMatchMinute(0);
+  setMatchLiveState("pre");
   $("#match-log").innerHTML = "";
   // 赛前简报写入日志
   const brief = buildPreMatchBriefing(world, next, user);
@@ -2322,6 +2320,82 @@ function openMatch() {
   showScreen("match");
 }
 
+/** FM 风格计分板：队名、球衣色、赛事 */
+function setupMatchScoreboard(home, away, fixture) {
+  ensureKit(home);
+  ensureKit(away);
+  const setName = (id, club) => {
+    const el = $(id);
+    if (el) el.textContent = club.name;
+  };
+  const setShort = (id, club) => {
+    const el = $(id);
+    if (el) el.textContent = club.short || "";
+  };
+  setName("#match-home", home);
+  setName("#match-away", away);
+  setShort("#match-home-short", home);
+  setShort("#match-away-short", away);
+  const hk = $("#match-home-kit");
+  const ak = $("#match-away-kit");
+  if (hk) hk.style.background = kitBackground(ensureKit(home));
+  if (ak) {
+    const kit = ensureKit(away);
+    // 避免与主队撞色：优先副色
+    ak.style.background = kitBackground({
+      ...kit,
+      primary: kit.secondary || kit.primary,
+      secondary: kit.primary,
+    });
+  }
+  const ctx = $("#match-context");
+  if (ctx) {
+    ctx.textContent =
+      fixture.competition === "cup"
+        ? fixture.roundLabel || t("match.cup")
+        : t("match.leagueRound", { n: fixture.round || "?" });
+  }
+}
+
+function setMatchScore(hg, ag) {
+  const h = $("#match-home-score");
+  const a = $("#match-away-score");
+  if (h) h.textContent = String(hg ?? 0);
+  if (a) a.textContent = String(ag ?? 0);
+  const legacy = $("#match-score");
+  if (legacy) legacy.textContent = `${hg ?? 0} - ${ag ?? 0}`;
+}
+
+function setMatchMinute(min) {
+  const el = $("#match-minute");
+  if (el) el.textContent = `${min ?? 0}'`;
+}
+
+/** @param {'pre'|'live'|'ht'|'ft'} state */
+function setMatchLiveState(state) {
+  const live = document.querySelector(".fm-sb-live");
+  const badge = $("#match-com-badge");
+  if (live) {
+    live.classList.remove("is-idle", "is-ft");
+    if (state === "pre" || state === "ht") {
+      live.classList.add("is-idle");
+      live.innerHTML =
+        state === "ht"
+          ? `<span class="fm-live-dot"></span> HT`
+          : `<span class="fm-live-dot"></span> PRE`;
+    } else if (state === "ft") {
+      live.classList.add("is-ft");
+      live.textContent = "FT";
+    } else {
+      live.innerHTML = `<span class="fm-live-dot"></span> LIVE`;
+    }
+  }
+  if (badge) {
+    badge.className = "fm-com-badge" + (state !== "pre" ? " " + state : "");
+    badge.textContent = state === "pre" ? "PRE" : state.toUpperCase();
+  }
+}
+
 function setMatchBusy(busy) {
   liveRunning = busy;
   $("#btn-sim-fast").disabled = busy;
@@ -2344,6 +2418,7 @@ async function runMatch(mode) {
   try {
     // 确保球场已挂载
     ensureMatchPitch();
+    setMatchLiveState("live");
 
     if (mode === "instant") {
       const result = simulateMatch(world, pendingMatch);
@@ -2354,8 +2429,8 @@ async function runMatch(mode) {
           onStep: (ev, snap) => {
             if (ev.type === "tick" || !ev.text) return;
             appendMatchEvent(ev);
-            $("#match-score").textContent = `${snap.homeGoals} - ${snap.awayGoals}`;
-            $("#match-minute").textContent = `${ev.minute || 90}'`;
+            setMatchScore(snap.homeGoals, snap.awayGoals);
+            setMatchMinute(ev.minute || 90);
           },
         });
       } else {
@@ -2364,8 +2439,9 @@ async function runMatch(mode) {
           appendMatchEvent(ev);
         }
       }
-      $("#match-score").textContent = `${result.homeGoals} - ${result.awayGoals}`;
-      $("#match-minute").textContent = "90'";
+      setMatchScore(result.homeGoals, result.awayGoals);
+      setMatchMinute(90);
+      setMatchLiveState("ft");
       showMatchReport(result.report || pendingMatch.matchReport);
       finishMatchUI();
       saveGame(world);
@@ -2380,18 +2456,19 @@ async function runMatch(mode) {
     const spd = Math.max(1, matchSpeed);
     const onEvent = async (ev, snap) => {
       if (ev.type === "tick") {
-        if (live) $("#match-minute").textContent = `${snap.minute}'`;
+        if (live) setMatchMinute(snap.minute);
         return;
       }
       if (matchView) matchView.onEvent(ev, snap, pendingMatch);
       if (live) {
         if (ev.text) appendMatchEvent(ev);
-        $("#match-score").textContent = `${snap.homeGoals} - ${snap.awayGoals}`;
-        $("#match-minute").textContent = `${ev.minute}'`;
+        setMatchScore(snap.homeGoals, snap.awayGoals);
+        setMatchMinute(ev.minute);
         if (ev.type === "context") {
           const ctx = $("#match-context");
           if (ctx) ctx.textContent = ev.text.replace(/^情境：/, "");
         }
+        if (ev.type === "ht") setMatchLiveState("ht");
         await sleep(
           (ev.type === "goal"
             ? 480
@@ -2410,8 +2487,8 @@ async function runMatch(mode) {
         if (ev.type === "tick" || !ev.text) continue;
         appendMatchEvent(ev);
       }
-      $("#match-score").textContent = `${matchState.hg} - ${matchState.ag}`;
-      $("#match-minute").textContent = "45'";
+      setMatchScore(matchState.hg, matchState.ag);
+      setMatchMinute(45);
       const ctxEv = matchState.events.find((e) => e.type === "context");
       if (ctxEv) {
         const ctx = $("#match-context");
@@ -2420,6 +2497,7 @@ async function runMatch(mode) {
     }
 
     // 中场暂停
+    setMatchLiveState("ht");
     setMatchBusy(false);
     openHalfTimePanel();
   } catch (err) {
@@ -2574,19 +2652,21 @@ async function finishHalfTime(applyOrders) {
   const eventCountBefore = matchState.events.length;
   try {
     const live = !!matchState._liveMode;
+    setMatchLiveState("live");
     // 先应用中场指令再刷新 2D（换人后号码/站位）
     // continueSecondHalf 内部会 applyUserHalfTime；此处先手动应用以更新 pitch
     const spd = Math.max(1, matchSpeed);
     const onEvent = async (ev, snap) => {
       if (ev.type === "tick") {
-        if (live) $("#match-minute").textContent = `${snap.minute}'`;
+        if (live) setMatchMinute(snap.minute);
         return;
       }
       if (matchView) matchView.onEvent(ev, snap, pendingMatch);
       if (live) {
         if (ev.text) appendMatchEvent(ev);
-        $("#match-score").textContent = `${snap.homeGoals} - ${snap.awayGoals}`;
-        $("#match-minute").textContent = `${ev.minute}'`;
+        setMatchScore(snap.homeGoals, snap.awayGoals);
+        setMatchMinute(ev.minute);
+        if (ev.type === "ft") setMatchLiveState("ft");
         await sleep((ev.type === "goal" ? 480 : ev.type === "coach" ? 160 : 70) / spd);
       }
     };
@@ -2609,8 +2689,9 @@ async function finishHalfTime(applyOrders) {
       }
     }
 
-    $("#match-score").textContent = `${result.homeGoals} - ${result.awayGoals}`;
-    $("#match-minute").textContent = "90'";
+    setMatchScore(result.homeGoals, result.awayGoals);
+    setMatchMinute(90);
+    setMatchLiveState("ft");
     showMatchReport(result.report || matchState.report);
     finishMatchUI();
     saveGame(world);
@@ -2700,7 +2781,14 @@ function appendMatchEvent(ev) {
   if (!ev || !ev.text) return;
   const div = document.createElement("div");
   div.className = `event ${ev.type || ""}`;
-  div.textContent = localizeMatchEvent(ev);
+  const min =
+    ev.minute != null && ev.minute !== ""
+      ? `${ev.minute}'`
+      : ev.type === "briefing"
+        ? "—"
+        : "";
+  const text = localizeMatchEvent(ev);
+  div.innerHTML = `<span class="ev-min">${escapeHtml(min)}</span><span class="ev-text">${escapeHtml(text)}</span>`;
   const log = $("#match-log");
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;

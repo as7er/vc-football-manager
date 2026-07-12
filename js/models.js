@@ -1,13 +1,12 @@
 /** 球员 / 球队生成 */
 
 import {
-  FIRST_NAMES,
-  LAST_NAMES,
   NATIONALITIES,
   CLUB_TEMPLATES,
   FORMATIONS,
   DIVISIONS,
   START_DIVISION,
+  generatePlayerName,
 } from "./data.js";
 
 let _id = 1;
@@ -237,7 +236,7 @@ export function createPlayer(pos, power = 65, clubId = null, opts = {}) {
   const nation = pick(NATIONALITIES);
   const p = {
     id: uid(isYouth ? "yt" : "pl"),
-    name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
+    name: generatePlayerName(nation.code, pick),
     pos,
     age,
     nationality: nation.code,

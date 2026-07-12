@@ -7,7 +7,7 @@
  * - 点球员查看属性（中场/终场暂停更明显）
  */
 
-import { FORMATIONS } from "./data.js";
+import { FORMATIONS, playerDisplaySurname } from "./data.js";
 import { ensureKit, getLineupPlayers, autoLineup } from "./models.js";
 
 function clamp(n, a, b) {
@@ -216,7 +216,9 @@ export class MatchView {
       el.setAttribute("tabindex", "0");
       el.title = p?.name || "";
       const num = p?.number ?? i + 1;
-      const name = p?.name?.split(" ").pop() || p?.name || "?";
+      const name = p
+        ? playerDisplaySurname(p.name, p.nationality)
+        : "?";
       el.innerHTML = `
         <div class="mp-dot" style="background:${color};color:${numColor};border-color:${isHome ? "rgba(255,255,255,0.85)" : "rgba(15,23,42,0.5)"}">
           <span class="mp-num">${num}</span>

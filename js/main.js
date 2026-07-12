@@ -7,6 +7,7 @@ import {
   NATIONALITIES,
   DIVISIONS,
   START_DIVISION,
+  playerDisplaySurname,
 } from "./data.js";
 import { ensureMedia, mediaSeasonKickoff } from "./media.js";
 import { t, initPrefs, getLang } from "./i18n.js";
@@ -737,7 +738,7 @@ function renderTraining() {
           const lowCls = fit < 65 || p.injured > 0 ? " low" : "";
           const tag = p.injured > 0 ? " 伤" : "";
           return `<div class="training-fit-row${lowCls}">
-            <span>${escapeHtml(p.name.split(/\s+/).pop() || p.name)}${tag}</span>
+            <span>${escapeHtml(playerDisplaySurname(p.name, p.nationality))}${tag}</span>
             <div class="bar"><i style="width:${fit}%"></i></div>
             <span class="fit-val">${fit}%</span>
           </div>`;
@@ -1541,12 +1542,8 @@ function renderTactics() {
   pitch.innerHTML = formation.slots
     .map((slot, i) => {
       const p = players[i];
-      // 名牌：姓（单名用全名）；球衣号用角标 + 名牌前缀
-      let label = "?";
-      if (p) {
-        const parts = String(p.name || "").trim().split(/\s+/).filter(Boolean);
-        label = parts.length > 1 ? parts[parts.length - 1] : parts[0] || "?";
-      }
+      // 名牌：姓（中韩取首词，其余取末词）；球衣号用角标 + 名牌前缀
+      const label = p ? playerDisplaySurname(p.name, p.nationality) : "?";
       const shirtNo = p && p.number != null ? p.number : null;
       const fallback = shirtNo != null ? shirtNo : p ? p.ovr : "-";
       const style = p

@@ -1,5 +1,6 @@
 /** 静态数据：俱乐部、名字、阵型 */
 
+/** 通用欧美名池（职员 / 回退） */
 export const FIRST_NAMES = [
   "Jack", "Lucas", "Marcus", "Harvey", "Kevin", "Leon", "Noah", "Oscar",
   "Paul", "Ryan", "Sebastian", "Thomas", "Victor", "William", "Alex", "Ben",
@@ -11,13 +12,458 @@ export const FIRST_NAMES = [
 ];
 
 export const LAST_NAMES = [
-  "Smith", "Muller", "Silva", "Rodriguez", "Brown", "Kim", "Chen", "Sato",
-  "Jones", "Garcia", "Martin", "Anderson", "Taylor", "Moore", "Jackson", "White",
-  "Harris", "Clark", "Lewis", "Walker", "Hall", "Allen", "Young", "Scott",
-  "Green", "Adams", "Baker", "Gonzalez", "Navarro", "Costa", "Fernandez", "Diaz",
-  "Lopez", "Perez", "Wilson", "Thompson", "Murphy", "Kelly", "Rossi", "Moreau",
-  "Schmidt", "Fischer", "Weber", "Wagner", "Becker", "Hoffmann", "Santos", "Oliveira",
+  "Smith", "Muller", "Silva", "Rodriguez", "Brown", "Jones", "Garcia", "Martin",
+  "Anderson", "Taylor", "Moore", "Jackson", "White", "Harris", "Clark", "Lewis",
+  "Walker", "Hall", "Allen", "Young", "Scott", "Green", "Adams", "Baker",
+  "Gonzalez", "Navarro", "Costa", "Fernandez", "Diaz", "Lopez", "Perez", "Wilson",
+  "Thompson", "Murphy", "Kelly", "Rossi", "Moreau", "Schmidt", "Fischer", "Weber",
+  "Wagner", "Becker", "Hoffmann", "Santos", "Oliveira",
 ];
+
+/**
+ * 按国籍的姓名池。
+ * order: "family-given" 姓在前（中/韩等足球惯例），"given-family" 名在前。
+ * first = 名 / 名罗马字；last = 姓
+ */
+export const NAMES_BY_NATION = {
+  CHN: {
+    order: "family-given",
+    first: [
+      "Wei", "Lei", "Ming", "Jun", "Hao", "Chen", "Yang", "Tao", "Jie", "Peng",
+      "Bo", "Kai", "Xin", "Yu", "Feng", "Qiang", "Bin", "Gang", "Long", "Fei",
+      "Xiaoming", "Jian", "Yong", "Zhi", "Liang", "Dong", "Cheng", "Xuan", "Rui", "Yi",
+      "Haoran", "Yifan", "Zihan", "Yuxuan", "Junhao", "Zixin", "Haoyu", "Yichen",
+    ],
+    last: [
+      "Wang", "Li", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou",
+      "Xu", "Sun", "Ma", "Zhu", "Hu", "Guo", "He", "Gao", "Lin", "Luo",
+      "Zheng", "Liang", "Xie", "Song", "Tang", "Han", "Feng", "Deng", "Cao", "Peng",
+      "Xiao", "Tian", "Dong", "Yuan", "Cai", "Pan", "Lu", "Jiang", "Dai", "Ye",
+    ],
+  },
+  JPN: {
+    order: "given-family",
+    first: [
+      "Hiroto", "Haruto", "Yuto", "Sota", "Ren", "Riku", "Kaito", "Sora", "Hayato", "Yuma",
+      "Takumi", "Daiki", "Kenta", "Shota", "Ryo", "Kenji", "Yusuke", "Kazuki", "Naoki", "Tsubasa",
+      "Aoi", "Minato", "Itsuki", "Hinata", "Asahi", "Taiga", "Yusei", "Ryota", "Keita", "Shun",
+      "Makoto", "Akira", "Satoshi", "Takeshi", "Shinji", "Gaku", "Koji", "Eiji",
+    ],
+    last: [
+      "Sato", "Suzuki", "Takahashi", "Tanaka", "Watanabe", "Ito", "Yamamoto", "Nakamura",
+      "Kobayashi", "Kato", "Yoshida", "Yamada", "Sasaki", "Yamaguchi", "Matsumoto", "Inoue",
+      "Kimura", "Hayashi", "Shimizu", "Yamazaki", "Mori", "Abe", "Ikeda", "Hashimoto",
+      "Yamashita", "Ishikawa", "Nakajima", "Maeda", "Fujita", "Okada", "Goto", "Hasegawa",
+      "Murakami", "Kondo", "Ishii", "Saito", "Sakamoto", "Endo", "Aoki", "Fujii",
+    ],
+  },
+  KOR: {
+    order: "family-given",
+    first: [
+      "Min-jae", "Heung-min", "Jae-sung", "Seung-ho", "Ji-sung", "Young-gwon", "Hyun-soo",
+      "Sang-hoon", "Dong-won", "Joon-ho", "Woo-young", "Ki-hun", "Sung-yueng", "Chung-yong",
+      "Tae-min", "Jin-hyun", "Kyung-won", "In-beom", "Ui-jo", "Chang-hoon",
+      "Min-kyu", "Seung-woo", "Jae-hwan", "Hyun-woo", "Sang-min", "Do-yun", "Ji-hoon",
+      "Woo-jin", "Seok-hyun", "Yeon-woo", "Hyeon-jun", "Si-woo", "Jun-seo", "Min-ho",
+    ],
+    last: [
+      "Kim", "Lee", "Park", "Choi", "Jung", "Kang", "Cho", "Yoon", "Jang", "Lim",
+      "Han", "Oh", "Seo", "Shin", "Kwon", "Hwang", "Ahn", "Song", "Yoo", "Hong",
+      "Jeon", "Ko", "Moon", "Yang", "Bae", "Baek", "Nam", "Ryu", "Ha", "Noh",
+    ],
+  },
+  ENG: {
+    order: "given-family",
+    first: [
+      "Jack", "Harry", "Oliver", "George", "Noah", "Leo", "Arthur", "Oscar", "Charlie", "Henry",
+      "Thomas", "James", "William", "Alfie", "Freddie", "Archie", "Theo", "Jude", "Mason", "Reece",
+    ],
+    last: [
+      "Smith", "Jones", "Taylor", "Brown", "Wilson", "Evans", "Thomas", "Roberts", "Johnson", "Lewis",
+      "Walker", "Robinson", "Wood", "Thompson", "White", "Watson", "Jackson", "Wright", "Green", "Hall",
+    ],
+  },
+  ESP: {
+    order: "given-family",
+    first: [
+      "Carlos", "Diego", "Pablo", "Javier", "Sergio", "Alvaro", "Hugo", "Mario", "Ivan", "Adrian",
+      "Raul", "Pedro", "Luis", "Miguel", "Andres", "Fernando", "Jorge", "David", "Alex", "Iker",
+    ],
+    last: [
+      "Garcia", "Rodriguez", "Martinez", "Lopez", "Gonzalez", "Hernandez", "Perez", "Sanchez",
+      "Ramirez", "Torres", "Flores", "Rivera", "Gomez", "Diaz", "Reyes", "Morales", "Ortiz", "Cruz",
+    ],
+  },
+  GER: {
+    order: "given-family",
+    first: [
+      "Lukas", "Leon", "Felix", "Jonas", "Max", "Tim", "Niklas", "Tobias", "Jan", "Paul",
+      "Finn", "Ben", "Elias", "Noah", "Luis", "Julian", "Moritz", "David", "Marco", "Kevin",
+    ],
+    last: [
+      "Muller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker",
+      "Hoffmann", "Schulz", "Koch", "Richter", "Klein", "Wolf", "Schroder", "Neumann", "Schwarz", "Zimmermann",
+    ],
+  },
+  FRA: {
+    order: "given-family",
+    first: [
+      "Lucas", "Hugo", "Louis", "Gabriel", "Arthur", "Jules", "Leo", "Raphael", "Adam", "Nathan",
+      "Theo", "Enzo", "Maxime", "Antoine", "Nicolas", "Pierre", "Mathis", "Paul", "Alexandre", "Thomas",
+    ],
+    last: [
+      "Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand",
+      "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel", "Garcia", "David", "Bertrand", "Roux",
+    ],
+  },
+  ITA: {
+    order: "given-family",
+    first: [
+      "Marco", "Luca", "Andrea", "Matteo", "Alessandro", "Lorenzo", "Francesco", "Davide", "Simone", "Giuseppe",
+      "Antonio", "Giovanni", "Riccardo", "Federico", "Nicolo", "Stefano", "Paolo", "Fabio", "Daniele", "Roberto",
+    ],
+    last: [
+      "Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci",
+      "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini", "Costa", "Giordano", "Rizzo",
+    ],
+  },
+  POR: {
+    order: "given-family",
+    first: [
+      "Joao", "Diogo", "Tiago", "Pedro", "Rui", "Nuno", "Miguel", "Andre", "Bruno", "Ricardo",
+      "Goncalo", "Bernardo", "Rafael", "Francisco", "Daniel", "Luis", "Paulo", "Sergio", "Filipe", "Hugo",
+    ],
+    last: [
+      "Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins",
+      "Jesus", "Sousa", "Fernandes", "Goncalves", "Gomes", "Lopes", "Marques", "Alves", "Ribeiro", "Pinto",
+    ],
+  },
+  BRA: {
+    order: "given-family",
+    first: [
+      "Lucas", "Gabriel", "Matheus", "Pedro", "Rafael", "Bruno", "Felipe", "Gustavo", "Thiago", "Leonardo",
+      "Andre", "Ricardo", "Marcos", "Diego", "Caio", "Vinicius", "Rodrigo", "Eduardo", "Paulo", "Joao",
+    ],
+    last: [
+      "Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira",
+      "Lima", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho", "Rocha", "Almeida", "Nascimento", "Araujo",
+    ],
+  },
+  ARG: {
+    order: "given-family",
+    first: [
+      "Santiago", "Mateo", "Benjamin", "Lucas", "Thiago", "Joaquin", "Lautaro", "Franco", "Tomas", "Nicolas",
+      "Diego", "Facundo", "Gonzalo", "Martin", "Emiliano", "Julian", "Agustin", "Ignacio", "Pablo", "Ezequiel",
+    ],
+    last: [
+      "Gonzalez", "Rodriguez", "Fernandez", "Lopez", "Martinez", "Garcia", "Perez", "Sanchez",
+      "Romero", "Diaz", "Torres", "Alvarez", "Ruiz", "Ramirez", "Flores", "Acosta", "Benítez", "Castro",
+    ],
+  },
+  NED: {
+    order: "given-family",
+    first: [
+      "Daan", "Sem", "Luuk", "Finn", "Noah", "Levi", "Milan", "Lucas", "Jesse", "Thijs",
+      "Bram", "Sven", "Jasper", "Tim", "Max", "Lars", "Ruben", "Stijn", "Koen", "Niek",
+    ],
+    last: [
+      "de Jong", "Jansen", "de Vries", "van den Berg", "van Dijk", "Bakker", "Visser", "Smit",
+      "Meijer", "de Boer", "Mulder", "de Groot", "Bos", "Vos", "Peters", "Hendriks", "van Leeuwen", "Dekker",
+    ],
+  },
+  BEL: {
+    order: "given-family",
+    first: [
+      "Lucas", "Louis", "Noah", "Arthur", "Adam", "Liam", "Victor", "Jules", "Nathan", "Mathis",
+      "Thomas", "Maxime", "Romain", "Kevin", "Axel", "Dries", "Thibaut", "Youri", "Eden", "Romelu",
+    ],
+    last: [
+      "Peeters", "Janssens", "Maes", "Jacobs", "Mertens", "Willems", "Claes", "Goossens",
+      "Wouters", "De Smet", "Dubois", "Lambert", "Simon", "Martin", "Leroy", "Dupont",
+    ],
+  },
+  CRO: {
+    order: "given-family",
+    first: [
+      "Luka", "Ivan", "Marko", "Josip", "Ante", "Mateo", "Filip", "Domagoj", "Mario", "Nikola",
+      "Tin", "Borna", "Andrej", "Dario", "Bruno", "Karlo", "Petar", "Stipe", "Toni", "Vedran",
+    ],
+    last: [
+      "Horvat", "Kovacic", "Babic", "Maric", "Juric", "Novak", "Kovac", "Vukovic",
+      "Petrovic", "Tomic", "Peric", "Simic", "Pavic", "Rukavina", "Brozovic", "Modric",
+    ],
+  },
+  URU: {
+    order: "given-family",
+    first: [
+      "Diego", "Luis", "Federico", "Matias", "Nicolas", "Sebastian", "Maximiliano", "Gaston", "Rodrigo", "Lucas",
+      "Cristian", "Martin", "Pablo", "Facundo", "Santiago", "Agustin", "Bruno", "Jose", "Carlos", "Edinson",
+    ],
+    last: [
+      "Rodriguez", "Gonzalez", "Fernandez", "Perez", "Martinez", "Silva", "Suarez", "Lopez",
+      "Garcia", "Cavani", "Gimenez", "Pereira", "Alvarez", "Nunez", "Bentancur", "Valverde",
+    ],
+  },
+  COL: {
+    order: "given-family",
+    first: [
+      "Juan", "Carlos", "Andres", "Luis", "James", "Radamel", "Yerry", "Davinson", "Mateus", "Luis",
+      "Sebastian", "Santiago", "Camilo", "Daniel", "Felipe", "Miguel", "Oscar", "Jhon", "Wilmar", "Jefferson",
+    ],
+    last: [
+      "Rodriguez", "Garcia", "Martinez", "Lopez", "Gonzalez", "Hernandez", "Perez", "Sanchez",
+      "Ramirez", "Torres", "Diaz", "Moreno", "Jimenez", "Ruiz", "Vargas", "Castro", "Rojas", "Gomez",
+    ],
+  },
+  MEX: {
+    order: "given-family",
+    first: [
+      "Diego", "Santiago", "Mateo", "Sebastian", "Leonardo", "Emiliano", "Daniel", "Miguel", "Carlos", "Luis",
+      "Javier", "Andres", "Raul", "Hector", "Guillermo", "Hirving", "Edson", "Cesar", "Jesus", "Uriel",
+    ],
+    last: [
+      "Hernandez", "Garcia", "Martinez", "Lopez", "Gonzalez", "Perez", "Rodriguez", "Sanchez",
+      "Ramirez", "Cruz", "Flores", "Gomez", "Diaz", "Reyes", "Morales", "Torres", "Ortiz", "Gutierrez",
+    ],
+  },
+  USA: {
+    order: "given-family",
+    first: [
+      "Liam", "Noah", "Ethan", "Mason", "Logan", "Lucas", "Aiden", "Jackson", "Sebastian", "Owen",
+      "Christian", "Tyler", "Jordan", "Brandon", "Austin", "Dylan", "Hunter", "Caleb", "Nathan", "Miles",
+    ],
+    last: [
+      "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson",
+      "Anderson", "Taylor", "Thomas", "Moore", "Jackson", "Martin", "Lee", "Thompson", "White", "Harris",
+    ],
+  },
+  NGA: {
+    order: "given-family",
+    first: [
+      "Chinedu", "Emeka", "Ifeanyi", "Obinna", "Chukwudi", "Kelechi", "Victor", "Samuel", "Daniel", "John",
+      "Ahmed", "Ibrahim", "Yusuf", "Oluwaseun", "Tunde", "Ade", "Femi", "Bayo", "Chisom", "Nnamdi",
+    ],
+    last: [
+      "Okafor", "Okeke", "Nwosu", "Eze", "Okonkwo", "Ibrahim", "Musa", "Bello",
+      "Ogunleye", "Adeyemi", "Balogun", "Adebayo", "Chukwu", "Nwachukwu", "Onyeka", "Igwe", "Uche", "Obi",
+    ],
+  },
+  SEN: {
+    order: "given-family",
+    first: [
+      "Ibrahima", "Moussa", "Cheikh", "Mamadou", "Ousmane", "Sadio", "Kalidou", "Ismaila", "Pape", "Abdou",
+      "Boulaye", "Edouard", "Idrissa", "Keita", "Famara", "Habib", "Bamba", "Amadou", "Serigne", "Youssou",
+    ],
+    last: [
+      "Diop", "Ndiaye", "Sarr", "Fall", "Gueye", "Ba", "Diallo", "Sow",
+      "Cisse", "Sy", "Mbaye", "Kane", "Thiam", "Faye", "Seck", "Diouf", "Sene", "Camara",
+    ],
+  },
+  GHA: {
+    order: "given-family",
+    first: [
+      "Kwame", "Kofi", "Kwesi", "Yaw", "Kojo", "Ama", "Samuel", "Thomas", "Jordan", "Andre",
+      "Mohammed", "Ibrahim", "Daniel", "Joseph", "Emmanuel", "Michael", "Felix", "Richmond", "Benjamin", "Christian",
+    ],
+    last: [
+      "Mensah", "Owusu", "Boateng", "Asante", "Appiah", "Osei", "Agyemang", "Adjei",
+      "Yeboah", "Amoah", "Darko", "Frimpong", "Kuffour", "Ofori", "Addo", "Ansah", "Bonsu", "Sarpong",
+    ],
+  },
+  CIV: {
+    order: "given-family",
+    first: [
+      "Serge", "Wilfried", "Nicolas", "Eric", "Max", "Franck", "Jean", "Didier", "Yaya", "Kolo",
+      "Salomon", "Gervinho", "Seydou", "Bakary", "Abdul", "Ibrahim", "Oumar", "Cheick", "Ismael", "Sekou",
+    ],
+    last: [
+      "Kone", "Traore", "Coulibaly", "Diallo", "Camara", "Sangare", "Bamba", "Toure",
+      "Drogba", "Kalou", "Gervais", "Zaha", "Aurier", "Bailly", "Kessie", "Pepe", "Haller", "Boli",
+    ],
+  },
+  MAR: {
+    order: "given-family",
+    first: [
+      "Youssef", "Amine", "Mehdi", "Hakim", "Sofiane", "Achraf", "Noussair", "Romain", "Azzedine", "Zakaria",
+      "Ilias", "Anass", "Bilal", "Hamza", "Ismail", "Karim", "Nabil", "Oussama", "Reda", "Tarik",
+    ],
+    last: [
+      "Amrabat", "Ziyech", "Hakimi", "Mazraoui", "Bounou", "En-Nesyri", "Saiss", "Aguerd",
+      "Boufal", "El Khannouss", "Tissoudali", "Benoun", "Munir", "Dari", "Attiat-Allah", "Cheddira",
+    ],
+  },
+  POL: {
+    order: "given-family",
+    first: [
+      "Piotr", "Krzysztof", "Andrzej", "Tomasz", "Jan", "Pawel", "Michal", "Marcin", "Jakub", "Adam",
+      "Kamil", "Robert", "Lukasz", "Wojciech", "Grzegorz", "Mateusz", "Bartosz", "Dawid", "Sebastian", "Rafal",
+    ],
+    last: [
+      "Nowak", "Kowalski", "Wisniewski", "Wojcik", "Kowalczyk", "Kaminski", "Lewandowski", "Zielinski",
+      "Szymanski", "Wozniak", "Kozlowski", "Jankowski", "Mazur", "Kwiatkowski", "Krawczyk", "Piotrowski",
+    ],
+  },
+  DEN: {
+    order: "given-family",
+    first: [
+      "Lucas", "William", "Noah", "Oscar", "Victor", "Oliver", "Elias", "Carl", "Emil", "Frederik",
+      "Mikkel", "Christian", "Andreas", "Jonas", "Mathias", "Thomas", "Nikolaj", "Rasmus", "Simon", "Kasper",
+    ],
+    last: [
+      "Nielsen", "Jensen", "Hansen", "Pedersen", "Andersen", "Christensen", "Larsen", "Sorensen",
+      "Rasmussen", "Jorgensen", "Petersen", "Madsen", "Kristensen", "Olsen", "Thomsen", "Christiansen",
+    ],
+  },
+  SWE: {
+    order: "given-family",
+    first: [
+      "Erik", "Lars", "Karl", "Anders", "Johan", "Per", "Nils", "Olof", "Gustav", "Mikael",
+      "Alexander", "Victor", "Emil", "Oscar", "William", "Lucas", "Hugo", "Elias", "Isak", "Felix",
+    ],
+    last: [
+      "Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Larsson", "Olsson", "Persson",
+      "Svensson", "Gustafsson", "Pettersson", "Jonsson", "Jansson", "Hansson", "Bengtsson", "Lindberg",
+    ],
+  },
+  NOR: {
+    order: "given-family",
+    first: [
+      "Ole", "Lars", "Erik", "Johan", "Anders", "Nils", "Per", "Thomas", "Martin", "Andreas",
+      "Kristian", "Henrik", "Sondre", "Mathias", "Jonas", "Emil", "Oskar", "Elias", "Isak", "Magnus",
+    ],
+    last: [
+      "Hansen", "Johansen", "Olsen", "Larsen", "Andersen", "Pedersen", "Nilsen", "Kristiansen",
+      "Jensen", "Karlsen", "Berg", "Haugen", "Hagen", "Johannessen", "Andreassen", "Jacobsen",
+    ],
+  },
+  SUI: {
+    order: "given-family",
+    first: [
+      "Noah", "Liam", "Leon", "Luca", "Elias", "Julian", "David", "Nico", "Fabio", "Marco",
+      "Kevin", "Stefan", "Michael", "Thomas", "Andreas", "Manuel", "Daniel", "Simon", "Reto", "Xherdan",
+    ],
+    last: [
+      "Muller", "Schmid", "Keller", "Weber", "Huber", "Meier", "Steiner", "Brunner",
+      "Fischer", "Baumann", "Frei", "Widmer", "Zuber", "Embolo", "Xhaka", "Shaqiri",
+    ],
+  },
+  AUT: {
+    order: "given-family",
+    first: [
+      "Lukas", "Tobias", "David", "Michael", "Thomas", "Andreas", "Stefan", "Markus", "Florian", "Marcel",
+      "Christoph", "Matthias", "Alexander", "Patrick", "Daniel", "Martin", "Philipp", "Julian", "Kevin", "Marco",
+    ],
+    last: [
+      "Gruber", "Huber", "Bauer", "Wagner", "Muller", "Steiner", "Moser", "Mayer",
+      "Hofer", "Leitner", "Berger", "Fuchs", "Eder", "Schmid", "Winkler", "Weber",
+    ],
+  },
+  TUR: {
+    order: "given-family",
+    first: [
+      "Mehmet", "Mustafa", "Ahmet", "Ali", "Huseyin", "Hasan", "Ibrahim", "Ismail", "Yusuf", "Omer",
+      "Emre", "Burak", "Cenk", "Hakan", "Arda", "Kerem", "Yusuf", "Ozan", "Merih", "Caglar",
+    ],
+    last: [
+      "Yilmaz", "Kaya", "Demir", "Sahin", "Celik", "Yildiz", "Yildirim", "Ozturk",
+      "Aydin", "Ozdemir", "Arslan", "Dogan", "Kilic", "Aslan", "Cetin", "Kara", "Koc", "Polat",
+    ],
+  },
+  SRB: {
+    order: "given-family",
+    first: [
+      "Nikola", "Marko", "Stefan", "Luka", "Nemanja", "Dusan", "Aleksandar", "Milos", "Filip", "Jovan",
+      "Petar", "Ivan", "Djordje", "Vuk", "Lazar", "Andrej", "Sasa", "Darko", "Igor", "Milan",
+    ],
+    last: [
+      "Jovanovic", "Petrovic", "Nikolic", "Markovic", "Djordjevic", "Stojanovic", "Ilic", "Stankovic",
+      "Pavlovic", "Milosevic", "Ristic", "Todorovic", "Popovic", "Kostic", "Mitrovic", "Tadic",
+    ],
+  },
+  UKR: {
+    order: "given-family",
+    first: [
+      "Andriy", "Oleksandr", "Serhiy", "Mykola", "Dmytro", "Vitaliy", "Roman", "Yuriy", "Igor", "Taras",
+      "Oleh", "Bohdan", "Artem", "Maksym", "Vladyslav", "Denys", "Ruslan", "Pavlo", "Mykhailo", "Yehor",
+    ],
+    last: [
+      "Shevchenko", "Kovalenko", "Bondarenko", "Tkachenko", "Kravchenko", "Oliynyk", "Shevchuk", "Polishchuk",
+      "Boyko", "Kovalchuk", "Melnyk", "Tkachuk", "Moroz", "Rudenko", "Savchenko", "Yarmolenko", "Zinchenko", "Mudryk",
+    ],
+  },
+  SCO: {
+    order: "given-family",
+    first: [
+      "Jack", "James", "Lewis", "Ryan", "Callum", "Scott", "Andrew", "David", "John", "Robert",
+      "Craig", "Stuart", "Gordon", "Fraser", "Cameron", "Ross", "Kieran", "Liam", "Connor", "Aidan",
+    ],
+    last: [
+      "Smith", "Brown", "Wilson", "Robertson", "Campbell", "Stewart", "Thomson", "Anderson",
+      "Scott", "Murray", "MacDonald", "Reid", "Taylor", "Clark", "Mitchell", "Ross", "Young", "Watson",
+    ],
+  },
+  WAL: {
+    order: "given-family",
+    first: [
+      "Owen", "Rhys", "Dylan", "Gareth", "Ioan", "Tomos", "Dafydd", "Cai", "Osian", "Jac",
+      "Aaron", "Ethan", "Harry", "James", "Daniel", "Joseph", "William", "Thomas", "Ben", "Sam",
+    ],
+    last: [
+      "Jones", "Williams", "Davies", "Evans", "Thomas", "Roberts", "Lewis", "Hughes",
+      "Morgan", "Griffiths", "Edwards", "Owen", "James", "Morris", "Price", "Rees", "Phillips", "Jenkins",
+    ],
+  },
+  IRL: {
+    order: "given-family",
+    first: [
+      "Jack", "James", "Conor", "Sean", "Adam", "Michael", "Daniel", "Patrick", "Cian", "Oisin",
+      "Liam", "Noah", "Finn", "Cillian", "Tadhg", "Eoin", "Ronan", "Darragh", "Shane", "Niall",
+    ],
+    last: [
+      "Murphy", "Kelly", "O'Sullivan", "Walsh", "Smith", "O'Brien", "Byrne", "Ryan",
+      "O'Connor", "O'Neill", "O'Reilly", "Doyle", "McCarthy", "Gallagher", "Doherty", "Kennedy", "Lynch", "Murray",
+    ],
+  },
+  AUS: {
+    order: "given-family",
+    first: [
+      "Jack", "Oliver", "William", "Noah", "Thomas", "James", "Lucas", "Henry", "Ethan", "Liam",
+      "Cooper", "Mason", "Charlie", "Harry", "Lachlan", "Mitchell", "Riley", "Jake", "Connor", "Bailey",
+    ],
+    last: [
+      "Smith", "Jones", "Williams", "Brown", "Wilson", "Taylor", "Johnson", "White",
+      "Martin", "Anderson", "Thompson", "Nguyen", "Thomas", "Walker", "Harris", "Lee", "Ryan", "King",
+    ],
+  },
+};
+
+/** 根据国籍 code 生成姓名；无专用池时回退通用池 */
+export function generatePlayerName(nationCode, pickFn) {
+  const pick = pickFn || ((arr) => arr[Math.floor(Math.random() * arr.length)]);
+  const pool = NAMES_BY_NATION[nationCode];
+  if (!pool) {
+    return `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`;
+  }
+  const first = pick(pool.first);
+  const last = pick(pool.last);
+  return pool.order === "family-given" ? `${last} ${first}` : `${first} ${last}`;
+}
+
+/**
+ * 球场 / 列表短名：取姓氏。
+ * 中/韩等 family-given 取首词；其余取末词。
+ */
+export function playerDisplaySurname(name, nationCode) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0];
+  const pool = NAMES_BY_NATION[nationCode];
+  if (pool?.order === "family-given") return parts[0];
+  return parts[parts.length - 1];
+}
 
 /** 国籍：code 用于标记，name 中文显示，flag 为 emoji */
 export const NATIONALITIES = [

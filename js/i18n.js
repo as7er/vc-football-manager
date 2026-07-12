@@ -49,6 +49,11 @@ const dict = {
     "start.filled": "共 {filled}/{total} 个存档 · 换设备请导出",
     "start.slotEmpty": "已选槽 {n}（空），可开始新赛季",
     "start.slotReady": "已选槽 {n}，可读取或覆盖",
+    "start.slotDelete": "删除此槽存档",
+    "start.slotDeleteShort": "删除",
+    "start.slotDeleteConfirm": "确定删除槽 {n} 的存档？此操作不可恢复（建议先导出备份）。",
+    "start.slotDeleted": "已删除槽 {n}",
+    "start.slotDeleteFail": "删除失败",
     "start.backMenu": "已返回菜单。有存档可继续读取。",
     "start.backMenuEmpty": "已返回菜单。",
 
@@ -329,6 +334,11 @@ const dict = {
     "start.filled": "{filled}/{total} slots used · export to move devices",
     "start.slotEmpty": "Slot {n} selected (empty) — ready for a new season",
     "start.slotReady": "Slot {n} selected — load or overwrite",
+    "start.slotDelete": "Delete this slot",
+    "start.slotDeleteShort": "Delete",
+    "start.slotDeleteConfirm": "Delete save in slot {n}? This cannot be undone (export first if unsure).",
+    "start.slotDeleted": "Slot {n} deleted",
+    "start.slotDeleteFail": "Delete failed",
     "start.backMenu": "Back to menu. You can load a save.",
     "start.backMenuEmpty": "Back to menu.",
 

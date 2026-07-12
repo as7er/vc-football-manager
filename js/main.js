@@ -117,6 +117,7 @@ import {
   exportSaveDownload,
   importSaveText,
   migrateLegacySave,
+  clearSave,
 } from "./save.js";
 import {
   ensureBoardObjective,
@@ -232,10 +233,16 @@ function refreshSlotUI() {
       const sub = s.empty
         ? t("start.slotEmptyClick")
         : t("start.slotManager", { name: escapeHtml(s.manager || "—") });
-      return `<button type="button" class="slot-card${activeCls}${emptyCls}" data-slot="${s.slot}">
-        <div class="slot-title">${escapeHtml(title)}</div>
-        <div class="slot-sub">${sub}</div>
-      </button>`;
+      const delBtn = s.empty
+        ? ""
+        : `<button type="button" class="slot-delete btn small danger" data-slot-delete="${s.slot}" title="${escapeHtml(t("start.slotDelete"))}" aria-label="${escapeHtml(t("start.slotDelete"))}">${escapeHtml(t("start.slotDeleteShort"))}</button>`;
+      return `<div class="slot-row${activeCls}${emptyCls}">
+        <button type="button" class="slot-card${activeCls}${emptyCls}" data-slot="${s.slot}">
+          <div class="slot-title">${escapeHtml(title)}</div>
+          <div class="slot-sub">${sub}</div>
+        </button>
+        ${delBtn}
+      </div>`;
     })
     .join("");
   box.querySelectorAll("[data-slot]").forEach((btn) => {
@@ -246,6 +253,29 @@ function refreshSlotUI() {
       $("#start-hint").textContent = info?.empty
         ? t("start.slotEmpty", { n: btn.dataset.slot })
         : t("start.slotReady", { n: btn.dataset.slot });
+    };
+  });
+  box.querySelectorAll("[data-slot-delete]").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const n = +btn.dataset.slotDelete;
+      const info = listSlots().find((x) => x.slot === n);
+      if (!info || info.empty) return;
+      const detail =
+        getLang() === "en"
+          ? `Slot ${n}: ${info.clubName || "—"} · S${info.season ?? "?"} D${info.day ?? "?"}`
+          : `槽 ${n}：${info.clubName || "—"} · S${info.season ?? "?"} D${info.day ?? "?"}`;
+      if (!confirm(`${t("start.slotDeleteConfirm", { n })}\n${detail}`)) return;
+      if (!clearSave(n)) {
+        toast(t("start.slotDeleteFail"));
+        return;
+      }
+      // 删的是当前槽：保持选中空槽；否则不改 active
+      if (getActiveSlot() === n) setActiveSlot(n);
+      refreshSlotUI();
+      $("#start-hint").textContent = t("start.slotDeleted", { n });
+      toast(t("start.slotDeleted", { n }));
     };
   });
 

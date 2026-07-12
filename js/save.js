@@ -142,6 +142,7 @@ export function listSlots() {
 }
 
 export function hasAnySave() {
+  migrateKeyNames();
   migrateLegacySave();
   for (let i = 1; i <= SLOT_COUNT; i++) {
     if (localStorage.getItem(slotKey(i))) return true;
@@ -193,13 +194,38 @@ export function loadGame(slot = null) {
   }
 }
 
+/** 删除指定槽存档（含旧键名兼容清理） */
 export function clearSave(slot = null) {
+  migrateKeyNames();
   const s = slot != null ? slot : getActiveSlot();
-  localStorage.removeItem(slotKey(s));
-  if (s === 1) localStorage.removeItem(LEGACY_KEY);
-  const meta = readMeta();
-  delete meta[s];
-  writeMeta(meta);
+  try {
+    localStorage.removeItem(slotKey(s));
+    localStorage.removeItem(oldSlotKey(s));
+    if (s === 1) {
+      localStorage.removeItem(LEGACY_KEY);
+      localStorage.removeItem(OLD_LEGACY_KEY);
+    }
+    const meta = readMeta();
+    delete meta[s];
+    writeMeta(meta);
+    // 同步清理旧 meta 里的同槽（若仍存在独立旧 meta）
+    try {
+      const oldRaw = localStorage.getItem(OLD_META_KEY);
+      if (oldRaw) {
+        const oldMeta = JSON.parse(oldRaw) || {};
+        if (oldMeta[s]) {
+          delete oldMeta[s];
+          localStorage.setItem(OLD_META_KEY, JSON.stringify(oldMeta));
+        }
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
 }
 
 export function formatSlotLabel(info) {

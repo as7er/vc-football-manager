@@ -2545,7 +2545,7 @@ function toast(msg) {
     el = document.createElement("div");
     el.id = "toast";
     el.style.cssText =
-      "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--toast-bg, #1e293b);border:1px solid var(--primary);color:var(--text);padding:0.65rem 1.2rem;border-radius:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw;text-align:center;";
+      "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--toast-bg);border:1px solid var(--border);color:var(--text);padding:0.65rem 1.2rem;border-radius:8px;z-index:200;box-shadow:var(--shadow);max-width:90vw;text-align:center;";
     document.body.appendChild(el);
   }
   el.textContent = msg;

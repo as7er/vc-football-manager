@@ -37,6 +37,9 @@ import {
   mediaSeasonKickoff,
   mediaSeasonAwards,
   ensureMedia,
+  narrativeAfterUserMatch,
+  narrativeTablePulse,
+  narrativeInjuryWave,
 } from "./media.js";
 import {
   ensureStaff,
@@ -119,17 +122,72 @@ function applyStyle(strength, tactics, side /* 'atk'|'def' */) {
 }
 
 /** 生成 90 分钟事件流（联赛或杯赛；cup 不改积分榜） */
+
+/** 近况：最近 n 场 W/D/L */
+function formScore(club, n = 5) {
+  const f = club.form || [];
+  const slice = f.slice(-n);
+  let s = 0;
+  for (const x of slice) {
+    if (x === "W") s += 1;
+    else if (x === "L") s -= 1;
+  }
+  return { score: s, len: slice.length, last: slice };
+}
+
+/**
+ * AI 赛前微调战术（用户队不改）
+ * 连败偏守 / 连胜偏攻 / 实力差大则反击或强压
+ */
+function aiTuneTactics(club, opponent) {
+  if (!club || !club.tactics || club.id === undefined) return;
+  const t = club.tactics;
+  const fs = formScore(club, 5);
+  const myP = club.power || 50;
+  const opP = opponent?.power || 50;
+  const diff = myP - opP;
+
+  // 默认别天天乱跳：有信号才改
+  if (fs.len >= 3 && fs.score <= -2) {
+    t.style = chance(0.5) ? "defend" : "counter";
+    t.pressing = Math.max(1, Math.min(3, (t.pressing || 3) - 1));
+    t.tempo = Math.max(1, Math.min(3, (t.tempo || 3) - 1));
+  } else if (fs.len >= 3 && fs.score >= 2) {
+    t.style = chance(0.55) ? "attack" : "balanced";
+    t.pressing = Math.min(5, Math.max(3, (t.pressing || 3) + 1));
+    t.tempo = Math.min(5, Math.max(3, (t.tempo || 3) + 1));
+  } else if (diff <= -12) {
+    t.style = "counter";
+    t.pressing = 2;
+    t.tempo = 2;
+  } else if (diff >= 12) {
+    t.style = chance(0.4) ? "attack" : "possession";
+    t.pressing = 4;
+    t.tempo = 3;
+  }
+
+  // 阵容：伤兵多时自动重排
+  const xi = getLineupPlayers(club);
+  const hurt = xi.filter((p) => p && (p.injured > 0 || (p.fitness || 100) < 55)).length;
+  if (hurt >= 2 || !t.lineup?.length) {
+    autoLineup(club);
+  }
+}
+
 export function simulateMatch(world, fixture, { live = false } = {}) {
   const home = clubById(world, fixture.home);
   const away = clubById(world, fixture.away);
   if (!home || !away) throw new Error("invalid fixture clubs");
 
+  ensureStaff(home);
+  ensureStaff(away);
+  // AI 赛前微调（用户队不改）
+  if (home.id !== world.userClubId) aiTuneTactics(home, away);
+  if (away.id !== world.userClubId) aiTuneTactics(away, home);
+
   autoLineup(home);
   autoLineup(away);
   const isCup = fixture.competition === "cup";
-
-  ensureStaff(home);
-  ensureStaff(away);
 
   let homeAtk = applyStyle(teamStrength(home), home.tactics, "atk");
   let homeDef = applyStyle(teamStrength(home), home.tactics, "def");
@@ -358,8 +416,10 @@ export function simulateMatch(world, fixture, { live = false } = {}) {
       day: world.day,
       text: `${tag}：对阵 ${opp.name} ${myG}-${opG} ${result}`,
     });
-    if (!isCup) mediaAfterUserMatch(world, fixture, me, opp, myG, opG);
-    else {
+    if (!isCup) {
+      mediaAfterUserMatch(world, fixture, me, opp, myG, opG);
+      narrativeAfterUserMatch(world, me, opp, myG, opG, false);
+    } else {
       pushMedia(world, {
         outlet: "VC体育",
         headline: `${tag}：${me.name} ${myG}-${opG} ${opp.name}，${result}`,
@@ -692,7 +752,11 @@ export function advanceDay(world) {
 
   // 媒体日常脉搏
   const userClub = clubById(world, world.userClubId);
-  if (userClub && !world.seasonOver) mediaDailyPulse(world, userClub);
+  if (userClub && !world.seasonOver) {
+    mediaDailyPulse(world, userClub);
+    narrativeTablePulse(world, userClub, getSortedTable);
+    narrativeInjuryWave(world, userClub);
+  }
 
   // 每周发工资（每 7 天）
   if (world.day % 7 === 0) {
@@ -1283,8 +1347,7 @@ function transferBetween(world, buyer, seller, player) {
 }
 
 /**
- * 极简 AI 转会：约每 3 天抽几支非用户队补短板 / 甩卖。
- * 可能从用户队挖人（你队人数>16 时）。
+ * AI 转会：窗内约每 3 天；按短板/年龄结构买卖，可能挖用户队。
  */
 export function processAiTransfers(world) {
   if (world.seasonOver || world.sacked) return [];
@@ -1294,28 +1357,49 @@ export function processAiTransfers(world) {
   const moves = [];
   const clubs = world.clubs.filter((c) => c.id !== world.userClubId);
   const shuffled = clubs.slice().sort(() => rng() - 0.5);
-  let budgetMoves = 4;
+  // 夏窗更活跃
+  let budgetMoves = getTransferPhase(world) === "summer" ? 6 : 3;
 
   for (const club of shuffled) {
     if (budgetMoves <= 0) break;
     ensureStaff(club);
     if (club.players.length < 14) continue;
 
-    // 资金紧张或人太多：卖最弱
-    if (club.money < 200000 || club.players.length >= 26) {
+    const avgAge =
+      club.players.reduce((s, p) => s + (p.age || 25), 0) / Math.max(1, club.players.length);
+    const needCash = club.money < 350000 || club.players.length >= 26;
+    const tooOld = avgAge >= 29 && club.players.length > 16;
+
+    // 卖：最弱、高龄低潜、或套现
+    if (needCash || tooOld || chance(0.15)) {
       const sellable = club.players
         .slice()
-        .sort((a, b) => (a.ovr || 0) - (b.ovr || 0) || (b.age || 0) - (a.age || 0));
+        .filter((p) => {
+          if (p.pos === "GK" && posCount(club.players, "GK") <= 1) return false;
+          return true;
+        })
+        .sort((a, b) => {
+          const sa = (a.ovr || 0) - (a.age >= 32 ? 3 : 0) + ((a.potential || a.ovr) < a.ovr ? -1 : 0);
+          const sb = (b.ovr || 0) - (b.age >= 32 ? 3 : 0) + ((b.potential || b.ovr) < b.ovr ? -1 : 0);
+          return sa - sb;
+        });
       const victim = sellable[0];
       if (victim && club.players.length > 15) {
-        const buyers = world.clubs.filter(
-          (c) =>
-            c.id !== club.id &&
-            c.players.length < 27 &&
-            c.money > (victim.value || 0) * 0.85
-        );
+        const buyers = world.clubs
+          .filter(
+            (c) =>
+              c.id !== club.id &&
+              c.players.length < 27 &&
+              c.money > (victim.value || 0) * 0.8
+          )
+          .sort((a, b) => {
+            // 缺该位置的优先
+            const da = posCount(a.players, victim.pos);
+            const db = posCount(b.players, victim.pos);
+            return da - db || b.money - a.money;
+          });
         if (buyers.length) {
-          const buyer = buyers[Math.floor(rng() * buyers.length)];
+          const buyer = buyers[0];
           const res = transferBetween(world, buyer, club, victim);
           if (res.ok) {
             moves.push(res);
@@ -1325,7 +1409,7 @@ export function processAiTransfers(world) {
             if (involvesUser) {
               world.news.unshift({
                 day: world.day,
-                text: 🔄  从  签下 ，,
+                text: `🔄 ${buyer.name} 从 ${club.name} 签下 ${victim.name}，费 ${formatMoney(res.price)}`,
               });
               mediaTransfer(world, {
                 type: club.id === world.userClubId ? "sell" : "buy",
@@ -1334,10 +1418,10 @@ export function processAiTransfers(world) {
                 otherName: club.name,
                 feeText: formatMoney(res.price),
               });
-            } else if (chance(0.3)) {
+            } else if (chance(0.35)) {
               world.news.unshift({
                 day: world.day,
-                text: 🔄  签下 （来自 ）,
+                text: `🔄 ${buyer.name} 签下 ${victim.name}（来自 ${club.name}）`,
               });
             }
             continue;
@@ -1346,35 +1430,50 @@ export function processAiTransfers(world) {
       }
     }
 
-    // 补短板
-    const needPos = ["GK", "DEF", "MID", "ATT"].find((pos) => {
-      const n = posCount(club.players, pos);
-      if (pos === "GK") return n < 2;
-      return n < 4;
-    });
+    // 买：补短板，优先同级或更强联赛中性价比
+    const counts = {
+      GK: posCount(club.players, "GK"),
+      DEF: posCount(club.players, "DEF"),
+      MID: posCount(club.players, "MID"),
+      ATT: posCount(club.players, "ATT"),
+    };
+    let needPos = null;
+    if (counts.GK < 2) needPos = "GK";
+    else {
+      const order = ["DEF", "MID", "ATT"].sort((a, b) => counts[a] - counts[b]);
+      if (counts[order[0]] < 5) needPos = order[0];
+      else if (chance(0.2)) needPos = order[0]; // 偶发升级阵容
+    }
     if (!needPos || club.money < 150000 || club.players.length >= 27) continue;
 
+    const minOvr = Math.max(6, Math.floor((club.power || 50) / 8) - 1);
     const candidates = [];
     for (const other of world.clubs) {
       if (other.id === club.id) continue;
       if (other.id === world.userClubId && other.players.length <= 16) continue;
+      // 略偏好同级
+      const sameDiv = (other.division || 3) === (club.division || 3);
       for (const p of other.players) {
         if (p.pos !== needPos) continue;
         if (other.players.length <= 14) continue;
         if (p.pos === "GK" && posCount(other.players, "GK") <= 1) continue;
-        const price = (p.value || estimateValue(p)) * 0.95;
+        if ((p.ovr || 0) < minOvr) continue;
+        // 别买高龄废柴
+        if ((p.age || 0) >= 33 && (p.ovr || 0) < 12) continue;
+        const price = (p.value || estimateValue(p)) * (0.9 + rng() * 0.15);
         if (price > club.money) continue;
-        candidates.push({
-          player: p,
-          club: other,
-          score: (p.ovr || 0) - price / 1000000,
-        });
+        const pot = p.potential || p.ovr || 10;
+        const ageBonus = (p.age || 25) <= 23 ? 1.5 : (p.age || 25) >= 31 ? -1 : 0;
+        const score =
+          (p.ovr || 0) + pot * 0.35 + ageBonus + (sameDiv ? 0.5 : 0) - price / 1_200_000;
+        candidates.push({ player: p, club: other, score, price });
       }
     }
     candidates.sort((a, b) => b.score - a.score);
     const pick = candidates[0];
     if (!pick) continue;
-    if (pick.club.id === world.userClubId && !chance(0.4)) continue;
+    // 挖用户队：窗内更积极
+    if (pick.club.id === world.userClubId && !chance(0.55)) continue;
 
     const res = transferBetween(world, club, pick.club, pick.player);
     if (res.ok) {
@@ -1383,7 +1482,7 @@ export function processAiTransfers(world) {
       if (pick.club.id === world.userClubId) {
         world.news.unshift({
           day: world.day,
-          text: ⚠️  挖走了你的 ！转会费 ,
+          text: `⚠️ ${club.name} 挖走了你的 ${pick.player.name}！转会费 ${formatMoney(res.price)}`,
         });
         mediaTransfer(world, {
           type: "sell",
@@ -1392,16 +1491,17 @@ export function processAiTransfers(world) {
           otherName: pick.club.name,
           feeText: formatMoney(res.price),
         });
-      } else if (chance(0.25)) {
+      } else if (chance(0.28)) {
         world.news.unshift({
           day: world.day,
-          text: 🔄  补强 ：签下 ,
+          text: `🔄 ${club.name} 补强${POS_LABEL[needPos] || needPos}：签下 ${pick.player.name}`,
         });
       }
     }
   }
   return moves;
 }
+
 
 export function buyPlayer(world, playerId, fromClubId) {
   if (world.sacked) return { ok: false, msg: "你已被解雇，无法操作转会" };

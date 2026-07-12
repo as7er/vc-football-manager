@@ -228,6 +228,128 @@ export function mediaSeasonKickoff(world, userClub, divName) {
   });
 }
 
+/**
+ * 基于近况 / 比分的叙事新闻（用户场次后）
+ * form: 俱乐部 form 数组 W/D/L
+ */
+export function narrativeAfterUserMatch(world, userClub, opp, myG, opG, isCup = false) {
+  if (!userClub || isCup) return;
+  const form = userClub.form || [];
+  const last = form.slice(-5);
+  const streak = (letter) => {
+    let n = 0;
+    for (let i = last.length - 1; i >= 0; i--) {
+      if (last[i] === letter) n++;
+      else break;
+    }
+    return n;
+  };
+  const wins = streak("W");
+  const losses = streak("L");
+  const name = userClub.name;
+  const short = userClub.short || name;
+
+  if (wins >= 3) {
+    pushMedia(world, {
+      outlet: "球迷之声",
+      headline: `热浪！${short} 联赛${wins} 连胜，看台高喊经理名字`,
+      body: `对阵${opp.name}的 ${myG}-${opG} 之后，${name}已取得 ${wins} 场连胜。媒体开始用“升级热门”字眼试探董事会的耐心与野心。`,
+      tone: "positive",
+      category: "form",
+    });
+    return;
+  }
+  if (losses >= 3) {
+    pushMedia(world, {
+      outlet: "午夜足球",
+      headline: `警报：${short} ${losses} 连败，董事会会议室灯火通明`,
+      body: `${myG}-${opG} 不敌${opp.name}后，连败扩大到 ${losses} 场。专栏尖锐提问：“是阵容问题，还是战术固执？”更衣室需要一场止血胜利。`,
+      tone: "negative",
+      category: "form",
+    });
+    return;
+  }
+  if (myG - opG >= 3) {
+    pushMedia(world, {
+      outlet: "VC体育",
+      headline: `大胜特写：${name} ${myG}-${opG} 打爆${opp.name}`,
+      body: `比分牌几乎来不及翻转。有记者写道：“这不是比赛，是体检——对手多项指标不合格。”`,
+      tone: "positive",
+      category: "match",
+    });
+  } else if (opG - myG >= 3) {
+    pushMedia(world, {
+      outlet: "联赛日报",
+      headline: `惨案：${name} ${myG}-${opG} 惨败${opp.name}，防线被点名`,
+      body: `赛后发布会预计火药味十足。球迷之声投票显示半数要求“冬窗必须补强后防”。`,
+      tone: "negative",
+      category: "match",
+    });
+  }
+}
+
+/** 积分榜叙事：保级/升级区（推进日程时低概率） */
+export function narrativeTablePulse(world, userClub, sortedTableFn) {
+  if (!userClub || Math.random() > 0.12) return;
+  let table = [];
+  try {
+    table = typeof sortedTableFn === "function" ? sortedTableFn(world, userClub.division || 3) : [];
+  } catch {
+    return;
+  }
+  if (!table.length) return;
+  const pos = table.findIndex((r) => r.id === userClub.id) + 1;
+  if (pos <= 0) return;
+  const n = table.length;
+  const played = table.find((r) => r.id === userClub.id)?.played || 0;
+  if (played < 6) return;
+
+  const name = userClub.name;
+  if (pos <= 3) {
+    pushMedia(world, {
+      outlet: "联赛日报",
+      headline: `升级区特写：${name} 现居第 ${pos}，对手开始“重点关照”`,
+      body: `积分榜前三的位置总会引来追赶者的逼抢与媒体放大镜。接下来的赛程被称作“成色检验”。`,
+      tone: "positive",
+      category: "league",
+    });
+  } else if (pos >= n - 2) {
+    pushMedia(world, {
+      outlet: "午夜足球",
+      headline: `保级泥潭：${name} 第 ${pos} 名，每分都像氧气`,
+      body: `数学上仍有希望，但情绪账户已经透支。有老记写道：“这时最贵的不是球星，是冷静。”`,
+      tone: "negative",
+      category: "league",
+    });
+  } else if (pos <= 6 && Math.random() < 0.5) {
+    pushMedia(world, {
+      outlet: "战术板",
+      headline: `中上游观察：${name} 第 ${pos}，距离前三 ${pos - 3} 个身位`,
+      body: `数据分析栏目指出，若能在定位球转化率上再抬两个点，升级区并非遥不可及。`,
+      tone: "neutral",
+      category: "tactics",
+    });
+  }
+}
+
+/** 伤病潮简讯 */
+export function narrativeInjuryWave(world, userClub) {
+  if (!userClub || Math.random() > 0.1) return;
+  const hurt = (userClub.players || []).filter((p) => p.injured > 0);
+  if (hurt.length < 3) return;
+  const names = hurt
+    .slice(0, 3)
+    .map((p) => p.name)
+    .join("、");
+  pushMedia(world, {
+    outlet: "VC体育",
+    headline: `伤病名单拉长：${userClub.short || userClub.name} 多人缺阵`,
+    body: `目前伤号包括 ${names}${hurt.length > 3 ? " 等" : ""}。队医组表示恢复计划优先保证联赛，杯赛或将轮换。`,
+    tone: "negative",
+    category: "injury",
+  });
+}
+
 export function mediaSeasonAwards(world, userClub, pos, divName) {
   let tone = "neutral";
   let headline = `${divName}收官：${userClub.name} 最终第 ${pos} 名`;

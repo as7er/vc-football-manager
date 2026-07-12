@@ -91,17 +91,27 @@ import {
   boardTone,
 } from "./board.js";
 
-/** 解雇后回菜单（保留存档供回顾，新开局覆盖当前槽） */
+/** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
   if (!result || !result.sacked) return false;
   autosave("sacked");
-  const msg =
-    (result.msg || result.sackedResult?.msg || "你已被董事会解雇。") +
-    "\n\n存档已保留。开新档将覆盖当前槽；也可读取其它槽。";
-  alert(msg);
+  const slot = getActiveSlot();
+  const slots = listSlots();
+  const empty = slots.find((s) => s.empty);
+  let pick = empty?.slot;
+  if (pick) {
+    setActiveSlot(pick);
+  }
+  const reason = result.msg || result.sackedResult?.msg || world?.sackedReason || "你已被董事会解雇。";
+  const tip = pick
+    ? `\n\n已自动选中空槽 ${pick} 方便开新档。\n解雇存档仍在槽 ${slot}（可读取回顾）。`
+    : `\n\n三个槽都有存档。开新档会覆盖「当前槽」——建议先选一个不心疼的槽，或先导出备份。\n解雇记录在槽 ${slot}。`;
+  alert(reason + tip);
   showScreen("start");
   refreshSlotUI();
-  $("#start-hint").textContent = `已被解雇（槽 ${getActiveSlot()}）。可开新赛季或换槽。`;
+  $("#start-hint").textContent = pick
+    ? `已被解雇。新档将写入槽 ${pick}；槽 ${slot} 保留解雇存档。`
+    : `已被解雇（槽 ${slot}）。请选择要覆盖的槽后开新赛季，或先导出。`;
   world = null;
   return true;
 }

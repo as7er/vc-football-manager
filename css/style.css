@@ -1990,8 +1990,9 @@ html[data-theme="light"] .fm-com-log .event.ft {
   width: min(860px, 100%);
 }
 
-/* 可点击队名 */
-button.club-link {
+/* 可点击队名 / 球员名 */
+button.club-link,
+button.player-link {
   background: none;
   border: none;
   padding: 0;
@@ -2004,9 +2005,32 @@ button.club-link {
   text-decoration: none;
   border-bottom: 1px solid transparent;
 }
-button.club-link:hover {
+button.club-link:hover,
+button.player-link:hover {
   border-bottom-color: var(--primary);
   color: var(--text);
+}
+button.player-link.pitch-player-link {
+  color: inherit;
+  font-weight: inherit;
+  font-size: inherit;
+  border-bottom: none;
+}
+button.player-link.pitch-player-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.player-dot.clickable-player {
+  cursor: pointer;
+}
+.player-dot.clickable-player:hover .name {
+  color: var(--primary);
+}
+.report-scorers .player-link {
+  font-weight: 600;
+}
+.training-fit-row .player-link {
+  font-size: inherit;
 }
 .form-pills {
   display: inline-flex;

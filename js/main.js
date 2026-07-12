@@ -625,10 +625,20 @@ function bindMainOnce() {
 
   // 积分榜 / 赛程 / 数据榜等：点击队名打开俱乐部详情
   document.body.addEventListener("click", (e) => {
-    const link = e.target.closest("[data-club-link]");
-    if (!link || !world) return;
-    e.preventDefault();
-    showClubModal(link.dataset.clubLink);
+    if (!world) return;
+    const clubLink = e.target.closest("[data-club-link]");
+    if (clubLink) {
+      e.preventDefault();
+      showClubModal(clubLink.dataset.clubLink);
+      return;
+    }
+    // 任意界面：点击球员名打开资料
+    const playerLink = e.target.closest("[data-player-link]");
+    if (playerLink) {
+      e.preventDefault();
+      e.stopPropagation();
+      showPlayerModal(playerLink.dataset.playerLink);
+    }
   });
 
   $("#modal-close").onclick = () => closeModal();
@@ -770,7 +780,7 @@ function renderTraining() {
           const lowCls = fit < 65 || p.injured > 0 ? " low" : "";
           const tag = p.injured > 0 ? " 伤" : "";
           return `<div class="training-fit-row${lowCls}">
-            <span>${escapeHtml(playerDisplaySurname(p.name, p.nationality))}${tag}</span>
+            <span>${playerLinkHtml(p.id, playerDisplaySurname(p.name, p.nationality) + tag)}</span>
             <div class="bar"><i style="width:${fit}%"></i></div>
             <span class="fit-val">${fit}%</span>
           </div>`;
@@ -1149,7 +1159,7 @@ function renderSquad() {
         .join(" ");
       return `<tr class="${xi.has(p.id) ? "me" : ""} ${!isAvailable(p) ? "row-unavailable" : ""}">
         <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${num}</span></td>
-        <td class="name-with-avatar">${playerAvatarHtml(p, club, 30)} <span>${escapeHtml(p.name)} ${statusBadges}</span></td>
+        <td class="name-with-avatar">${playerAvatarHtml(p, club, 30)} <span>${playerLinkHtml(p.id, p.name)} ${statusBadges}</span></td>
         <td>${nationLabel(p)}</td>
         <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
         <td>${p.age}</td>
@@ -1528,7 +1538,7 @@ function renderYouth() {
           const num = p.number != null ? p.number : "—";
           return `<tr>
             <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${num}</span></td>
-            <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${escapeHtml(p.name)}</span></td>
+            <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}</span></td>
             <td>${nationLabel(p)}</td>
             <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
             <td>${p.age}</td>
@@ -1536,6 +1546,7 @@ function renderYouth() {
             <td class="${potClass}"><strong>${pot}</strong></td>
             <td>${formatMoney(p.wage)}</td>
             <td>
+              <button class="btn small" data-player-link="${p.id}">详情</button>
               <button class="btn small primary" data-promote="${p.id}">提拔</button>
               <button class="btn small danger" data-release="${p.id}">释放</button>
             </td>
@@ -1604,9 +1615,12 @@ function renderTactics() {
           : "";
       const nameText =
         shirtNo != null ? `#${shirtNo} ${label}` : label;
-      return `<div class="player-dot" style="left:${slot.x}%;top:${slot.y}%" title="${escapeHtml(full)}">
+      const nameHtml = p
+        ? playerLinkHtml(p.id, nameText, "pitch-player-link")
+        : escapeHtml(nameText);
+      return `<div class="player-dot${p ? " clickable-player" : ""}" style="left:${slot.x}%;top:${slot.y}%" title="${escapeHtml(full)}" ${p ? `data-player-link="${escapeHtml(p.id)}"` : ""}>
         <div class="circle kit-dot" style="${style}">${av || fallback}${badge}</div>
-        <div class="name">${escapeHtml(nameText)}</div>
+        <div class="name">${nameHtml}</div>
       </div>`;
     })
     .join("");
@@ -1620,6 +1634,12 @@ function closeModal() {
 function clubLinkHtml(clubId, label, extraClass = "") {
   const name = label ?? world.clubs.find((c) => c.id === clubId)?.name ?? clubId;
   return `<button type="button" class="club-link ${extraClass}" data-club-link="${escapeHtml(clubId)}">${escapeHtml(name)}</button>`;
+}
+
+/** 可点击球员名 → showPlayerModal（全局 data-player-link 委托） */
+function playerLinkHtml(playerId, label, extraClass = "") {
+  if (!playerId) return escapeHtml(label ?? "—");
+  return `<button type="button" class="player-link ${extraClass}" data-player-link="${escapeHtml(playerId)}">${escapeHtml(label ?? "?")}</button>`;
 }
 
 function formatFormHtml(form) {
@@ -1765,7 +1785,7 @@ function showClubModal(clubId) {
       return `<tr>
         <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${p.number ?? "—"}</span></td>
         <td class="name-with-avatar">${playerAvatarHtml(p, club, 26)}
-          <button type="button" class="club-link" data-view-player="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>
+          ${playerLinkHtml(p.id, p.name)}
         </td>
         <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
         <td>${p.age}</td>
@@ -1868,11 +1888,6 @@ function showClubModal(clubId) {
     </div>
   `;
 
-  // 弹窗内点球员 → 球员详情
-  $("#modal-body").querySelectorAll("[data-view-player]").forEach((btn) => {
-    btn.onclick = () => showPlayerModal(btn.dataset.viewPlayer);
-  });
-
   $("#modal-card")?.classList.add("wide");
   $("#modal").classList.remove("hidden");
 }
@@ -1943,7 +1958,7 @@ function renderStats() {
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
-            <td>${escapeHtml(p.name)}</td>
+            <td>${playerLinkHtml(p.id, p.name)}</td>
             <td>${clubLinkHtml(club.id, club.short)}</td>
             <td><strong>${s.goals}</strong></td>
             <td>${s.assists}</td>
@@ -1961,7 +1976,7 @@ function renderStats() {
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
-            <td>${escapeHtml(p.name)}</td>
+            <td>${playerLinkHtml(p.id, p.name)}</td>
             <td>${clubLinkHtml(club.id, club.short)}</td>
             <td><strong>${s.assists}</strong></td>
             <td>${s.goals}</td>
@@ -1979,7 +1994,7 @@ function renderStats() {
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
-            <td>${escapeHtml(p.name)}</td>
+            <td>${playerLinkHtml(p.id, p.name)}</td>
             <td>${clubLinkHtml(club.id, club.short)}</td>
             <td>${s.apps}</td>
             <td><strong>${s.cleanSheets}</strong></td>
@@ -2047,7 +2062,7 @@ function renderTransfer() {
           <div>
             <strong>${escapeHtml(b.buyerName)}</strong> 报价
             <strong>${formatMoney(b.fee)}</strong> 求购
-            <strong>${escapeHtml(b.playerName)}</strong>
+            <strong>${playerLinkHtml(b.playerId, b.playerName)}</strong>
             <span class="muted">（${b.pos} · ${b.ovr} · 剩 ${Math.max(0, b.expiresDay - world.day)} 天）</span>
           </div>
           <div class="poach-actions">
@@ -2092,15 +2107,15 @@ function renderTransfer() {
       const valTxt = formatScoutValue(world, p);
       const ovrTxt = formatScoutOvr(world, p);
       return `<tr>
-        <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${escapeHtml(p.name)}</span></td>
+        <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}</span></td>
         <td>${nationLabel(p)}</td>
         <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
         <td class="${ovrClass(p.ovr)}">${ovrTxt}</td>
         <td>${p.age}</td>
-        <td>${escapeHtml(club.short)}</td>
+        <td>${clubLinkHtml(club.id, club.short)}</td>
         <td title="真实身价仅作参考区间">${valTxt}</td>
         <td>
-          <button class="btn small" data-view="${p.id}">详情</button>
+          <button class="btn small" data-player-link="${p.id}">详情</button>
           <button class="btn small primary" data-buy="${p.id}" data-from="${club.id}" ${
             buyDisabled ? "disabled" : ""
           }>${open ? "谈判买入" : "窗关"}</button>
@@ -2109,9 +2124,6 @@ function renderTransfer() {
     })
     .join("");
 
-  mt.querySelectorAll("[data-view]").forEach((b) => {
-    b.onclick = () => showPlayerModal(b.dataset.view);
-  });
   mt.querySelectorAll("[data-buy]").forEach((b) => {
     b.onclick = () => openBuyNegotiator(b.dataset.buy, b.dataset.from);
   });
@@ -2122,14 +2134,17 @@ function renderTransfer() {
   st.innerHTML = sorted
     .map(
       (p) => `<tr>
-      <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${escapeHtml(p.name)}</span></td>
+      <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}</span></td>
       <td>${nationLabel(p)}</td>
       <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
       <td class="${ovrClass(p.ovr)}">${p.ovr}</td>
       <td>${formatMoney(p.value)}</td>
-      <td><button class="btn small danger" data-sell="${p.id}" ${
-        buyDisabled ? "disabled" : ""
-      }>${open ? "出售" : "窗关"}</button></td>
+      <td>
+        <button class="btn small" data-player-link="${p.id}">详情</button>
+        <button class="btn small danger" data-sell="${p.id}" ${
+          buyDisabled ? "disabled" : ""
+        }>${open ? "出售" : "窗关"}</button>
+      </td>
     </tr>`
     )
     .join("");
@@ -2833,8 +2848,12 @@ function showMatchReport(report) {
     .filter(Boolean)
     .join(" · ");
 
-  const scorers = (report.scorers || [])
-    .map((s) => escapeHtml(s.text.replace(/^⚽\s*/, "")))
+  const scorerHtml = (report.scorers || [])
+    .map((s) => {
+      const raw = String(s.text || "").replace(/^⚽\s*/, "");
+      if (s.playerId) return playerLinkHtml(s.playerId, raw);
+      return escapeHtml(raw);
+    })
     .join("<br>");
 
   el.innerHTML = `
@@ -2859,7 +2878,7 @@ function showMatchReport(report) {
         ${row(t("match.woodwork"), h.woodwork, a.woodwork, false)}
       </tbody>
     </table>
-    ${scorers ? `<div class="report-scorers"><strong>${t("match.scorers")}</strong><br>${scorers}</div>` : ""}
+    ${scorerHtml ? `<div class="report-scorers"><strong>${t("match.scorers")}</strong><br>${scorerHtml}</div>` : ""}
   `;
   el.classList.remove("hidden");
 }

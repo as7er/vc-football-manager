@@ -150,6 +150,7 @@ export function hasAnySave() {
 }
 
 export function hasSave(slot = null) {
+  migrateKeyNames();
   migrateLegacySave();
   if (slot == null) {
     return !!localStorage.getItem(slotKey(getActiveSlot())) || !!localStorage.getItem(LEGACY_KEY);
@@ -159,6 +160,7 @@ export function hasSave(slot = null) {
 
 export function saveGame(world, slot = null) {
   try {
+    migrateKeyNames();
     const s = slot != null ? slot : getActiveSlot();
     const key = slotKey(s);
     localStorage.setItem(key, JSON.stringify(world));
@@ -177,6 +179,7 @@ export function saveGame(world, slot = null) {
 
 export function loadGame(slot = null) {
   try {
+    migrateKeyNames();
     migrateLegacySave();
     const s = slot != null ? slot : getActiveSlot();
     let raw = localStorage.getItem(slotKey(s));

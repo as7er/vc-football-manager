@@ -31,6 +31,9 @@ import {
   fillYouthSquad,
   ensurePlayerHistory,
   emptyMatchStats,
+  seasonAvgRating,
+  ratingClass,
+  formatRating,
   YOUTH_LEVELS,
   YOUTH_UPGRADE_COST,
   ensureKit,
@@ -1144,6 +1147,8 @@ function renderSquad() {
       const gCls = !isGk && colG > 0 ? "stat-high" : isGk && colG > 0 ? "stat-high" : "";
       const aCls =
         isGk && colA > 0 ? "stat-low" : !isGk && colA > 0 ? "stat-mid" : "";
+      const avgR = seasonAvgRating(p);
+      const lastR = s.lastRating != null ? s.lastRating : null;
       const num = p.number != null ? p.number : "—";
       const statusBadges = [
         xi.has(p.id) ? '<span class="badge">首发</span>' : "",
@@ -1167,6 +1172,8 @@ function renderSquad() {
         <td class="num-stat" title="${escapeHtml(t("squad.appsTitle") || "本赛季出场")}">${apps}</td>
         <td class="num-stat ${gCls}" title="${escapeHtml(gTitle)}">${colG}</td>
         <td class="num-stat ${aCls}" title="${escapeHtml(aTitle)}">${colA}</td>
+        <td class="num-stat rating-cell ${ratingClass(avgR)}" title="${escapeHtml(t("squad.avgRTitle") || "本赛季场均评分")}">${formatRating(avgR)}</td>
+        <td class="num-stat rating-cell ${ratingClass(lastR)}" title="${escapeHtml(t("squad.lastRTitle") || "最近一场评分")}">${formatRating(lastR)}</td>
         <td>${p.fitness}%</td>
         <td>${p.morale}</td>
         <td>${formatMoney(p.value)}</td>
@@ -1234,6 +1241,7 @@ function showPlayerModal(playerId) {
   const isGk = player.pos === "GK";
 
   // 分赛季历史 + 当前未归档赛季
+  const curAvgR = seasonAvgRating(player);
   const historyRows = [...(player.history || [])]
     .sort((a, b) => b.season - a.season)
     .map(
@@ -1243,6 +1251,7 @@ function showPlayerModal(playerId) {
         <td>${h.apps}</td>
         <td>${isGk ? h.cleanSheets : h.goals}</td>
         <td>${isGk ? h.goalsConceded : h.assists}</td>
+        <td class="rating-cell ${ratingClass(h.avgRating)}">${formatRating(h.avgRating)}</td>
       </tr>`
     );
   if (season.apps || season.goals || season.assists || season.cleanSheets || season.goalsConceded) {
@@ -1256,12 +1265,13 @@ function showPlayerModal(playerId) {
       <td>${season.apps}</td>
       <td>${isGk ? season.cleanSheets : season.goals}</td>
       <td>${isGk ? season.goalsConceded : season.assists}</td>
+      <td class="rating-cell ${ratingClass(curAvgR)}">${formatRating(curAvgR)}</td>
     </tr>`);
   }
 
   const histHead = isGk
-    ? `<th>赛季</th><th>球队</th><th>出场</th><th>零封</th><th>失球</th>`
-    : `<th>赛季</th><th>球队</th><th>出场</th><th>进球</th><th>助攻</th>`;
+    ? `<th>赛季</th><th>球队</th><th>出场</th><th>零封</th><th>失球</th><th>场均</th>`
+    : `<th>赛季</th><th>球队</th><th>出场</th><th>进球</th><th>助攻</th><th>场均</th>`;
 
   const honorHtml = (player.honors || []).length
     ? `<div class="honor-list">${player.honors
@@ -1323,6 +1333,12 @@ function showPlayerModal(playerId) {
         isGk
           ? ` · 零封 ${season.cleanSheets} · 失球 ${season.goalsConceded}`
           : ` · 进球 ${season.goals} · 助攻 ${season.assists}`
+      }
+      · 场均 <strong class="${ratingClass(curAvgR)}">${formatRating(curAvgR)}</strong>
+      ${
+        season.lastRating != null
+          ? ` · 最近 <strong class="${ratingClass(season.lastRating)}">${formatRating(season.lastRating)}</strong>`
+          : ""
       }
     </p>
 
@@ -1947,7 +1963,7 @@ function renderTable() {
 }
 
 function renderStats() {
-  const { goals, assists, keepers } = getStatLeaders(world);
+  const { goals, assists, keepers, ratings } = getStatLeaders(world);
   const uid = world.userClubId;
 
   const goalsBody = $("#stats-goals tbody");
@@ -1955,6 +1971,7 @@ function renderStats() {
     ? goals
         .map(({ player: p, club }, i) => {
           const s = playerStats(p);
+          const avgR = seasonAvgRating(p);
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
@@ -1963,16 +1980,18 @@ function renderStats() {
             <td><strong>${s.goals}</strong></td>
             <td>${s.assists}</td>
             <td>${s.apps}</td>
+            <td class="rating-cell ${ratingClass(avgR)}">${formatRating(avgR)}</td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="6" class="muted">暂无进球数据，踢完比赛后更新</td></tr>`;
+    : `<tr><td colspan="7" class="muted">暂无进球数据，踢完比赛后更新</td></tr>`;
 
   const assistsBody = $("#stats-assists tbody");
   assistsBody.innerHTML = assists.length
     ? assists
         .map(({ player: p, club }, i) => {
           const s = playerStats(p);
+          const avgR = seasonAvgRating(p);
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
@@ -1981,16 +2000,37 @@ function renderStats() {
             <td><strong>${s.assists}</strong></td>
             <td>${s.goals}</td>
             <td>${s.apps}</td>
+            <td class="rating-cell ${ratingClass(avgR)}">${formatRating(avgR)}</td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="6" class="muted">暂无助攻数据，踢完比赛后更新</td></tr>`;
+    : `<tr><td colspan="7" class="muted">暂无助攻数据，踢完比赛后更新</td></tr>`;
+
+  const ratingsBody = $("#stats-ratings tbody");
+  if (ratingsBody) {
+    ratingsBody.innerHTML = ratings?.length
+      ? ratings
+          .map(({ player: p, club, avgRating, lastRating, apps }, i) => {
+            const me = club.id === uid;
+            return `<tr class="${me ? "me" : ""}">
+            <td>${i + 1}</td>
+            <td>${playerLinkHtml(p.id, p.name)}</td>
+            <td>${clubLinkHtml(club.id, club.short)}</td>
+            <td class="rating-cell ${ratingClass(avgRating)}"><strong>${formatRating(avgRating)}</strong></td>
+            <td class="rating-cell ${ratingClass(lastRating)}">${formatRating(lastRating)}</td>
+            <td>${apps}</td>
+          </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="6" class="muted">至少 3 场出场后显示评分榜</td></tr>`;
+  }
 
   const keepersBody = $("#stats-keepers tbody");
   keepersBody.innerHTML = keepers.length
     ? keepers
         .map(({ player: p, club, gaPerGame }, i) => {
           const s = playerStats(p);
+          const avgR = seasonAvgRating(p);
           const me = club.id === uid;
           return `<tr class="${me ? "me" : ""}">
             <td>${i + 1}</td>
@@ -2000,10 +2040,11 @@ function renderStats() {
             <td><strong>${s.cleanSheets}</strong></td>
             <td>${s.goalsConceded}</td>
             <td>${gaPerGame.toFixed(2)}</td>
+            <td class="rating-cell ${ratingClass(avgR)}">${formatRating(avgR)}</td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="7" class="muted">暂无门将数据，踢完比赛后更新</td></tr>`;
+    : `<tr><td colspan="8" class="muted">暂无门将数据，踢完比赛后更新</td></tr>`;
 }
 
 function openBuyNegotiator(playerId, fromClubId) {
@@ -2856,6 +2897,50 @@ function showMatchReport(report) {
     })
     .join("<br>");
 
+  const ratings = report.ratings;
+  const rateSideHtml = (list, sideLabel) => {
+    if (!list?.length) return "";
+    const rows = list
+      .slice(0, 11)
+      .map((x) => {
+        const bits = [];
+        if (x.goals) bits.push(`${x.goals}G`);
+        if (x.assists) bits.push(`${x.assists}A`);
+        if (x.saves) bits.push(`${x.saves}S`);
+        const note = bits.length ? ` <span class="muted">${bits.join(" ")}</span>` : "";
+        const name = x.playerId
+          ? playerLinkHtml(x.playerId, x.name)
+          : escapeHtml(x.name || "—");
+        return `<tr>
+          <td class="muted">${escapeHtml(x.pos || "")}</td>
+          <td>${name}${note}</td>
+          <td class="num rating-cell ${ratingClass(x.rating)}"><strong>${formatRating(x.rating)}</strong></td>
+        </tr>`;
+      })
+      .join("");
+    return `<div class="report-ratings-side">
+      <div class="report-ratings-title">${escapeHtml(sideLabel)}</div>
+      <table class="report-ratings-table"><tbody>${rows}</tbody></table>
+    </div>`;
+  };
+  let ratingsHtml = "";
+  if (ratings?.home?.length || ratings?.away?.length) {
+    const motm = ratings.motm;
+    const motmHtml = motm
+      ? `<div class="report-motm">${t("match.motm") || "本场最佳"}：${
+          motm.playerId ? playerLinkHtml(motm.playerId, motm.name) : escapeHtml(motm.name || "")
+        } <strong class="${ratingClass(motm.rating)}">${formatRating(motm.rating)}</strong></div>`
+      : "";
+    ratingsHtml = `<div class="report-ratings">
+      <strong>${t("match.ratings") || "球员评分"}</strong>
+      ${motmHtml}
+      <div class="report-ratings-grid">
+        ${rateSideHtml(ratings.home, h.short || h.name)}
+        ${rateSideHtml(ratings.away, a.short || a.name)}
+      </div>
+    </div>`;
+  }
+
   el.innerHTML = `
     <h3>${t("match.report")}</h3>
     <div class="match-report-meta">${escapeHtml(t("match.reportMeta", { meta: meta || t("match.regular"), score: report.score }))}</div>
@@ -2879,6 +2964,7 @@ function showMatchReport(report) {
       </tbody>
     </table>
     ${scorerHtml ? `<div class="report-scorers"><strong>${t("match.scorers")}</strong><br>${scorerHtml}</div>` : ""}
+    ${ratingsHtml}
   `;
   el.classList.remove("hidden");
 }

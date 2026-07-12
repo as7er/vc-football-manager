@@ -900,6 +900,7 @@ function buildReport(state) {
         text: e.text,
         penalty: !!e.penalty,
       })),
+    ratings: state.matchRatings || null,
   };
 }
 
@@ -971,6 +972,116 @@ function updateMorale(club, gf, ga) {
 }
 
 /**
+ * 根据本场事件与比分，给出场球员打 1–10 评分（FM 风格）
+ * @returns {{ home: object[], away: object[], motm: object|null }}
+ */
+function applyMatchRatings(state) {
+  const { home, away, hg, ag, events } = state;
+  /** @type {Map<string, { goals: number, assists: number, saves: number, yellow: number, red: number, wood: number }>} */
+  const bag = new Map();
+  const bump = (id, key, n = 1) => {
+    if (!id) return;
+    if (!bag.has(id)) {
+      bag.set(id, { goals: 0, assists: 0, saves: 0, yellow: 0, red: 0, wood: 0 });
+    }
+    bag.get(id)[key] += n;
+  };
+  for (const e of events || []) {
+    if (e.type === "goal") {
+      bump(e.playerId, "goals");
+      if (e.assistId) bump(e.assistId, "assists");
+    } else if (e.type === "save" || e.type === "pen_miss") {
+      // pen_miss 的 playerId 可能是主罚方；仅 save 记扑救
+      if (e.type === "save") bump(e.playerId, "saves");
+    } else if (e.type === "card") {
+      bump(e.playerId, "yellow");
+    } else if (e.type === "red") {
+      bump(e.playerId, "red");
+    } else if (e.type === "woodwork") {
+      bump(e.playerId, "wood");
+    }
+  }
+
+  const rateSide = (club, gf, ga, won, drew) => {
+    const list = [];
+    const xi = getLineupPlayers(club);
+    for (const p of xi) {
+      if (!p) continue;
+      const st = ensureStats(p);
+      const m = bag.get(p.id) || {
+        goals: 0,
+        assists: 0,
+        saves: 0,
+        yellow: 0,
+        red: 0,
+        wood: 0,
+      };
+      let r = 6.4;
+      // 能力微调
+      r += ((p.ovr || 12) - 12) * 0.04;
+      // 体能/士气
+      r += ((p.fitness || 80) - 75) * 0.008;
+      r += ((p.morale || 70) - 70) * 0.006;
+
+      if (p.pos === "GK") {
+        r += m.saves * 0.22;
+        if (ga === 0) r += 0.55;
+        else r -= Math.min(1.4, ga * 0.28);
+        r += m.goals * 0.8; // 门将进球极罕见
+      } else {
+        r += m.goals * 0.95;
+        r += m.assists * 0.55;
+        r += m.wood * 0.15;
+        // 前场贡献封顶防刷分
+        r = Math.min(r, 6.4 + 3.2);
+      }
+
+      r += m.yellow * -0.35;
+      r += m.red * -1.6;
+      if (won) r += 0.28;
+      else if (drew) r += 0.05;
+      else r -= 0.22;
+
+      // 噪声
+      r += (rng() - 0.5) * 0.45;
+      r = clamp(Math.round(r * 10) / 10, 3.0, 10.0);
+
+      st.ratingSum = (st.ratingSum || 0) + r;
+      st.lastRating = r;
+      list.push({
+        playerId: p.id,
+        name: p.name,
+        pos: p.pos,
+        number: p.number,
+        rating: r,
+        goals: m.goals,
+        assists: m.assists,
+        saves: m.saves,
+      });
+    }
+    list.sort((a, b) => b.rating - a.rating);
+    return list;
+  };
+
+  const homeWon = hg > ag;
+  const awayWon = ag > hg;
+  const drew = hg === ag;
+  const homeList = rateSide(home, hg, ag, homeWon, drew);
+  const awayList = rateSide(away, ag, hg, awayWon, drew);
+
+  let motm = null;
+  const all = [
+    ...homeList.map((x) => ({ ...x, teamId: home.id, side: "home" })),
+    ...awayList.map((x) => ({ ...x, teamId: away.id, side: "away" })),
+  ];
+  if (all.length) {
+    all.sort((a, b) => b.rating - a.rating);
+    motm = all[0];
+  }
+  return { home: homeList, away: awayList, motm };
+}
+
+/**
  * 写入比分、积分、新闻、报告
  */
 export function finalizeMatch(state) {
@@ -996,6 +1107,10 @@ export function finalizeMatch(state) {
     ensureStats(awayGk).goalsConceded += hg;
     if (hg === 0) ensureStats(awayGk).cleanSheets++;
   }
+
+  // 赛后评分（依赖事件中的进球/助攻/扑救/牌）
+  const ratings = applyMatchRatings(state);
+  state.matchRatings = ratings;
 
   fixture.homeGoals = hg;
   fixture.awayGoals = ag;

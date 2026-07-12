@@ -209,6 +209,8 @@
                     <th data-i18n="th.apps" title="本赛季出场">出场</th>
                     <th data-i18n="th.goals" title="本赛季进球 / 门将零封">进球</th>
                     <th data-i18n="th.assists" title="本赛季助攻 / 门将失球">助攻</th>
+                    <th data-i18n="th.avgR" title="本赛季场均评分">场均</th>
+                    <th data-i18n="th.lastR" title="最近一场评分">最近</th>
                     <th data-i18n="th.fit">体能</th>
                     <th data-i18n="th.morale">士气</th>
                     <th data-i18n="th.scout">球探估值</th>
@@ -470,6 +472,7 @@
                       <th data-i18n="th.goals">进球</th>
                       <th data-i18n="th.assists">助攻</th>
                       <th data-i18n="th.apps">出场</th>
+                      <th data-i18n="th.avgR">场均</th>
                     </tr>
                   </thead>
                   <tbody></tbody>
@@ -488,13 +491,33 @@
                       <th data-i18n="th.assists">助攻</th>
                       <th data-i18n="th.goals">进球</th>
                       <th data-i18n="th.apps">出场</th>
+                      <th data-i18n="th.avgR">场均</th>
                     </tr>
                   </thead>
                   <tbody></tbody>
                 </table>
               </div>
             </div>
-            <div class="card span-2">
+            <div class="card">
+              <h2 data-i18n="stats.ratings">评分榜</h2>
+              <p class="hint" style="margin:0.25rem 0 0.5rem" data-i18n="stats.ratingsHint">本级联赛 · 至少 3 场出场 · 场均评分</p>
+              <div class="table-wrap">
+                <table id="stats-ratings">
+                  <thead>
+                    <tr>
+                      <th data-i18n="th.num">#</th>
+                      <th data-i18n="th.player">球员</th>
+                      <th data-i18n="th.club">球队</th>
+                      <th data-i18n="th.avgR">场均</th>
+                      <th data-i18n="th.lastR">最近</th>
+                      <th data-i18n="th.apps">出场</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
               <h2 data-i18n="stats.keepers">门将榜（零封 / 失球）</h2>
               <div class="table-wrap">
                 <table id="stats-keepers">
@@ -507,6 +530,7 @@
                       <th data-i18n="th.cs">零封</th>
                       <th data-i18n="th.ga">失球</th>
                       <th data-i18n="th.gavg">场均失球</th>
+                      <th data-i18n="th.avgR">场均</th>
                     </tr>
                   </thead>
                   <tbody></tbody>

@@ -116,18 +116,56 @@ export function agePlayerOneYear(p) {
 }
 
 export function emptyMatchStats() {
-  return { apps: 0, goals: 0, assists: 0, cleanSheets: 0, goalsConceded: 0 };
+  return {
+    apps: 0,
+    goals: 0,
+    assists: 0,
+    cleanSheets: 0,
+    goalsConceded: 0,
+    /** 本赛季评分合计（÷ apps = 场均） */
+    ratingSum: 0,
+    /** 最近一场评分 0–10 */
+    lastRating: null,
+  };
+}
+
+/** 本赛季场均评分；不足 1 场返回 null */
+export function seasonAvgRating(p) {
+  const s = p?.stats || emptyMatchStats();
+  const apps = s.apps || 0;
+  if (!apps || s.ratingSum == null || s.ratingSum <= 0) return null;
+  return Math.round((s.ratingSum / apps) * 10) / 10;
+}
+
+/** 评分颜色档：≥7.5 高 / ≥6.5 中 / 其余低 */
+export function ratingClass(r) {
+  if (r == null || Number.isNaN(r)) return "";
+  if (r >= 7.5) return "rating-high";
+  if (r >= 6.5) return "rating-mid";
+  if (r >= 5.5) return "rating-ok";
+  return "rating-low";
+}
+
+export function formatRating(r) {
+  if (r == null || Number.isNaN(r)) return "—";
+  return Number(r).toFixed(1);
 }
 
 /** 兼容旧存档：补齐生涯总计与分赛季历史 */
 export function ensurePlayerHistory(p) {
   if (!p.stats) p.stats = emptyMatchStats();
+  else {
+    const e = emptyMatchStats();
+    for (const k of Object.keys(e)) {
+      if (p.stats[k] == null) p.stats[k] = e[k];
+    }
+  }
   if (!p.career) {
     p.career = { ...emptyMatchStats() };
   } else {
     const e = emptyMatchStats();
     for (const k of Object.keys(e)) {
-      if (p.career[k] == null) p.career[k] = 0;
+      if (p.career[k] == null) p.career[k] = e[k];
     }
   }
   if (!Array.isArray(p.history)) p.history = [];
@@ -154,6 +192,10 @@ export function archiveAndResetSeasonStats(p, season, clubId, clubName) {
       (h) => h.season === season && h.clubId === clubId && h.apps === s.apps && h.goals === s.goals
     );
     if (!dup) {
+      const avgR =
+        s.apps > 0 && s.ratingSum > 0
+          ? Math.round((s.ratingSum / s.apps) * 10) / 10
+          : null;
       p.history.push({
         season,
         clubId: clubId || p.clubId || null,
@@ -163,12 +205,16 @@ export function archiveAndResetSeasonStats(p, season, clubId, clubName) {
         assists: s.assists || 0,
         cleanSheets: s.cleanSheets || 0,
         goalsConceded: s.goalsConceded || 0,
+        avgRating: avgR,
       });
       p.career.apps += s.apps || 0;
       p.career.goals += s.goals || 0;
       p.career.assists += s.assists || 0;
       p.career.cleanSheets += s.cleanSheets || 0;
       p.career.goalsConceded += s.goalsConceded || 0;
+      if (s.ratingSum > 0) {
+        p.career.ratingSum = (p.career.ratingSum || 0) + s.ratingSum;
+      }
     }
   }
 

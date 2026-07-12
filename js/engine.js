@@ -1332,7 +1332,7 @@ export function allPlayersWithClub(world, division = null) {
   return list;
 }
 
-/** 射手榜 / 助攻榜 / 门将榜（默认本级联赛） */
+/** 射手榜 / 助攻榜 / 门将榜 / 评分榜（默认本级联赛） */
 export function getStatLeaders(world, division = null) {
   const user = getUserClub(world);
   const div = division != null ? division : user?.division || 3;
@@ -1374,7 +1374,32 @@ export function getStatLeaders(world, division = null) {
     )
     .slice(0, 15);
 
-  return { goals, assists, keepers };
+  // 场均评分：至少 3 场（避免一两场高分刷榜）
+  const ratings = all
+    .map((x) => {
+      const s = x.player.stats || {};
+      const apps = s.apps || 0;
+      const avg =
+        apps > 0 && s.ratingSum > 0
+          ? Math.round((s.ratingSum / apps) * 10) / 10
+          : null;
+      return {
+        ...x,
+        avgRating: avg,
+        lastRating: s.lastRating ?? null,
+        apps,
+      };
+    })
+    .filter((x) => x.avgRating != null && x.apps >= 3)
+    .sort(
+      (a, b) =>
+        b.avgRating - a.avgRating ||
+        b.apps - a.apps ||
+        b.player.ovr - a.player.ovr
+    )
+    .slice(0, 20);
+
+  return { goals, assists, keepers, ratings };
 }
 
 export function refreshStaffMarket(world) {

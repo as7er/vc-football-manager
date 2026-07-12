@@ -2132,6 +2132,46 @@ button.player-link.pitch-player-link:hover {
 .stat-mid { color: var(--warn); }
 .stat-low { color: var(--bad); }
 
+/* 赛后评分 1–10 */
+.rating-high { color: var(--good); font-weight: 700; }
+.rating-mid { color: #7dd3a0; font-weight: 600; }
+.rating-ok { color: var(--text); }
+.rating-low { color: var(--bad); font-weight: 600; }
+.rating-cell { font-variant-numeric: tabular-nums; text-align: center; }
+.report-ratings {
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+.report-motm {
+  margin: 0.4rem 0 0.55rem;
+  font-size: 0.92rem;
+}
+.report-ratings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+@media (max-width: 720px) {
+  .report-ratings-grid { grid-template-columns: 1fr; }
+}
+.report-ratings-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.report-ratings-table {
+  width: 100%;
+  font-size: 0.82rem;
+  border-collapse: collapse;
+}
+.report-ratings-table td {
+  padding: 0.15rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.report-ratings-table td.num { text-align: right; white-space: nowrap; }
+
 .modal-card h3 { color: var(--text); font-weight: 600; }
 .modal-card .table-wrap { margin-top: 0.25rem; }
 .modal-card table th { font-size: 0.75rem; }

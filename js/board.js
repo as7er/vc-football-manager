@@ -5,8 +5,8 @@ import { formatMoney } from "./models.js";
 
 const STATUS_LABEL = {
   active: "进行中",
-  on_track: "达标轨道",
-  met: "达标轨道",
+  on_track: "达标中",
+  met: "达标中",
   tight: "边缘",
   at_risk: "危险",
   danger: "危险",
@@ -108,7 +108,7 @@ export function ensureBoardObjective(world) {
     world.news = world.news || [];
     world.news.unshift({
       day: world.day || 1,
-      text: `📋 董事会目标：${world.board.label}。达成奖金 ${formatMoney(world.board.bonus)}，未完成罚款 ${formatMoney(world.board.fine)}。`,
+      text: `董事会目标：${world.board.label}。达成奖金 ${formatMoney(world.board.bonus)}，未完成罚款 ${formatMoney(world.board.fine)}。`,
     });
   }
   return world.board;
@@ -202,7 +202,7 @@ export function checkBoardMidSeason(world, sortedTableFn) {
   if (prog.status === "danger" && prev !== "danger") {
     world.news.unshift({
       day: world.day,
-      text: `⚠️ 董事会施压：当前第 ${prog.pos}，目标「${board.label}」。继续下滑将面临罚款 ${formatMoney(board.fine)}。`,
+      text: `董事会施压：当前第 ${prog.pos}，目标「${board.label}」。继续下滑将面临罚款 ${formatMoney(board.fine)}。`,
     });
     for (const p of user.players || []) {
       p.morale = Math.max(30, (p.morale || 70) - 2);
@@ -210,7 +210,7 @@ export function checkBoardMidSeason(world, sortedTableFn) {
   } else if (prog.status === "met" && prev === "danger") {
     world.news.unshift({
       day: world.day,
-      text: `✅ 董事会认可：排名回升至第 ${prog.pos}，目标「${board.label}」重回正轨。`,
+      text: `董事会认可：排名回升至第 ${prog.pos}，目标「${board.label}」重回正轨。`,
     });
     for (const p of user.players || []) {
       p.morale = Math.min(100, (p.morale || 70) + 1);
@@ -218,7 +218,7 @@ export function checkBoardMidSeason(world, sortedTableFn) {
   } else if (prog.status === "danger" && world.day % 28 < 3) {
     world.news.unshift({
       day: world.day,
-      text: `📉 目标告急：仍在第 ${prog.pos}（目标前 ${board.targetPos}）。`,
+      text: `目标告急：仍在第 ${prog.pos}（目标前 ${board.targetPos}）。`,
     });
   }
 }
@@ -248,7 +248,7 @@ export function settleBoardObjective(world, finalPos, sortedTableFn) {
     user.money += board.bonus;
     world.news.unshift({
       day: world.day,
-      text: `🎯 董事会目标完成！${divName}第 ${pos} 名 · 「${board.label}」。奖金 ${formatMoney(board.bonus)} 已到账。`,
+      text: `董事会目标完成！${divName}第 ${pos} 名 · 「${board.label}」。奖金 ${formatMoney(board.bonus)} 已到账。`,
     });
     for (const p of user.players || []) {
       p.morale = Math.min(100, (p.morale || 70) + 4);
@@ -259,7 +259,7 @@ export function settleBoardObjective(world, finalPos, sortedTableFn) {
   user.money = Math.max(0, user.money - board.fine);
   world.news.unshift({
     day: world.day,
-    text: `❌ 董事会目标未完成：${divName}第 ${pos} 名（目标前 ${board.targetPos}）。罚款 ${formatMoney(board.fine)}。`,
+    text: `董事会目标未完成：${divName}第 ${pos} 名（目标前 ${board.targetPos}）。罚款 ${formatMoney(board.fine)}。`,
   });
   for (const p of user.players || []) {
     p.morale = Math.max(25, (p.morale || 70) - 5);
@@ -267,31 +267,29 @@ export function settleBoardObjective(world, finalPos, sortedTableFn) {
   return { ok: false, status: "failed", money: -board.fine };
 }
 
-/** UI 摘要：board + 可选当前排名/场次 */
-export function boardStatusLine(board, pos, played) {
+export function boardObjectiveLabel(board) {
+  return board?.label || "—";
+}
+
+/** UI 一行摘要 */
+export function boardStatusLine(board) {
   if (!board) return "—";
   if (board.settled) {
     const st = board.status === "success" || board.status === "achieved" ? "已完成" : "未完成";
-    return `${board.label} · ${st}（赛季末第 ${board.finalPos ?? "—"}） · 奖 ${formatMoney(board.bonus)} / 罚 ${formatMoney(board.fine)}`;
+    return `${board.label} · ${st}（赛季末第 ${board.finalPos ?? "—"}）`;
   }
-  const st = boardStatusLabel(board.status);
-  const posText = pos > 0 ? `当前第 ${pos}` : "尚未开赛";
-  const games = played != null ? ` · 已赛 ${played} 场` : "";
-  return `${board.label} · ${st}（${posText}${games}） · 奖 ${formatMoney(board.bonus)} / 罚 ${formatMoney(board.fine)}`;
+  return `${board.label} · ${boardStatusLabel(board.status)} · 奖 ${formatMoney(board.bonus)} / 罚 ${formatMoney(board.fine)}`;
 }
 
-/**
- * UI 色调：可传 board 对象或 status 字符串
- * @returns {""|"ok"|"warn"|"danger"}
- */
-export function boardTone(boardOrStatus) {
-  const s =
-    typeof boardOrStatus === "string"
-      ? boardOrStatus
-      : boardOrStatus?.status;
-  if (!s) return "";
-  if (s === "success" || s === "achieved" || s === "met" || s === "on_track") return "ok";
-  if (s === "tight" || s === "active") return "warn";
+/** UI 样式：ok | warn | danger | "" */
+export function boardTone(board) {
+  if (!board) return "";
+  if (board.settled) {
+    return board.status === "success" || board.status === "achieved" ? "ok" : "danger";
+  }
+  const s = board.status;
+  if (s === "met" || s === "on_track" || s === "success" || s === "achieved") return "ok";
+  if (s === "tight" || s === "warn") return "warn";
   if (s === "danger" || s === "at_risk" || s === "failed") return "danger";
   return "";
 }

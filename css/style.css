@@ -2580,10 +2580,52 @@ html[data-theme="light"] .ht-role-tips, html[data-theme="light"] .ht-role-tip {
   stroke: rgba(167, 139, 250, 0.95);
   stroke-width: 0.9;
 }
+.mp-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+.mp-field.mp-canvas-mode .mp-actors .mp-player {
+  opacity: 0.02; /* 几乎不可见，保留点击热区 */
+}
+.mp-field.mp-canvas-mode .mp-actors .mp-ball {
+  opacity: 0;
+}
+.mp-field.mp-canvas-mode .mp-form-zones {
+  opacity: 0; /* Canvas 已画 */
+}
+.mp-rec-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 14;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.85);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  pointer-events: none;
+  animation: mp-replay-pulse 1s ease-in-out infinite;
+}
+.mp-rec-badge.hidden { display: none; }
+.match-rec-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
 .mp-actors {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 4;
 }
 .mp-fx {
   position: absolute;

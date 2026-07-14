@@ -190,10 +190,12 @@ export class MatchView {
           <svg class="mp-trails" id="mp-trails" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="mp-bench-lane home" id="mp-bench-home" aria-hidden="true"></div>
           <div class="mp-bench-lane away" id="mp-bench-away" aria-hidden="true"></div>
+          <canvas class="mp-canvas" id="mp-canvas" aria-hidden="true"></canvas>
           <div class="mp-actors" id="mp-actors"></div>
           <div class="mp-fx" id="mp-fx"></div>
         </div>
         <div class="mp-replay-badge hidden" id="mp-replay-badge">▶ REPLAY</div>
+        <div class="mp-rec-badge hidden" id="mp-rec-badge">● REC</div>
         <div class="mp-banner hidden" id="mp-banner"></div>
         <div class="mp-caption hidden" id="mp-caption" aria-live="polite"></div>
         <div class="mp-flash-card hidden" id="mp-flash-card" aria-live="polite"></div>
@@ -253,6 +255,11 @@ export class MatchView {
     this.replayBadgeEl = wrap.querySelector("#mp-replay-badge");
     this.benchHomeEl = wrap.querySelector("#mp-bench-home");
     this.benchAwayEl = wrap.querySelector("#mp-bench-away");
+    this.canvas = wrap.querySelector("#mp-canvas");
+    this.recBadgeEl = wrap.querySelector("#mp-rec-badge");
+    this._canvasEnabled = true;
+    this._rec = { active: false, frames: [], t0: 0, lastPush: 0 };
+    this._initCanvas();
     this.focusIds = new Set();
     this.focusUntil = 0;
     this.aftermathUntil = 0;
@@ -1492,6 +1499,219 @@ export class MatchView {
     this.fieldEl?.classList.toggle("mp-poss-away", side === "away");
   }
 
+  // ---------- Canvas 渲染层（与 DOM 并存：Canvas 画球星，DOM 点选） ----------
+  _initCanvas() {
+    if (!this.canvas || !this.fieldEl) return;
+    const resize = () => {
+      const r = this.fieldEl.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(120, Math.floor(r.width));
+      const h = Math.max(160, Math.floor(r.height));
+      this.canvas.width = Math.floor(w * dpr);
+      this.canvas.height = Math.floor(h * dpr);
+      this.canvas.style.width = `${w}px`;
+      this.canvas.style.height = `${h}px`;
+      this._cx = this.canvas.getContext("2d");
+      this._cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this._cw = w;
+      this._ch = h;
+    };
+    resize();
+    this._onCanvasResize = resize;
+    window.addEventListener("resize", resize);
+    // DOM 球员改为透明热区，视觉交给 Canvas
+    this.fieldEl.classList.add("mp-canvas-mode");
+  }
+
+  _drawCanvas() {
+    const ctx = this._cx;
+    if (!ctx || !this._canvasEnabled || !this._cw) return;
+    const w = this._cw;
+    const h = this._ch;
+    ctx.clearRect(0, 0, w, h);
+    const px = (x) => (x / 100) * w;
+    const py = (y) => (y / 100) * h;
+
+    // 阵型色块（轻）
+    if (this.formZonesEl) {
+      for (const z of this.formZonesEl.querySelectorAll(".mp-zone")) {
+        const left = parseFloat(z.style.left) || 0;
+        const top = parseFloat(z.style.top) || 0;
+        const zw = parseFloat(z.style.width) || 0;
+        const zh = parseFloat(z.style.height) || 0;
+        ctx.fillStyle = z.classList.contains("home")
+          ? "rgba(59,130,246,0.10)"
+          : "rgba(239,68,68,0.10)";
+        ctx.beginPath();
+        ctx.ellipse(
+          px(left + zw / 2),
+          py(top + zh / 2),
+          px(zw / 2),
+          py(zh / 2),
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
+    // 球员
+    for (const pl of this.players) {
+      if (pl.el.classList.contains("sent-off")) continue;
+      const x = px(pl.x);
+      const y = py(pl.y);
+      const r = Math.max(9, Math.min(w, h) * 0.028);
+      // 阴影
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + r * 0.55, r * 0.7, r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 圆点
+      const bg = pl.el.querySelector(".mp-dot")?.style?.background || "#3d8bfd";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.lineWidth = pl.team === "home" ? 2 : 1.5;
+      ctx.strokeStyle = pl.team === "home" ? "#fff" : "rgba(15,23,42,0.75)";
+      if (pl.el.classList.contains("has-ball")) {
+        ctx.strokeStyle = "#fde68a";
+        ctx.lineWidth = 2.5;
+      } else if (pl.fsm === "press") {
+        ctx.strokeStyle = "rgba(248,113,113,0.9)";
+      } else if (pl.fsm === "support") {
+        ctx.strokeStyle = "rgba(96,165,250,0.85)";
+      }
+      ctx.stroke();
+      // 号码
+      ctx.fillStyle = pl.el.querySelector(".mp-dot")?.style?.color || "#fff";
+      ctx.font = `900 ${Math.max(9, r * 0.95)}px system-ui,sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(pl.num ?? ""), x, y + 0.5);
+      // 姓名
+      if (pl.el.classList.contains("show-name") || pl.el.classList.contains("has-ball")) {
+        ctx.font = `800 ${Math.max(8, r * 0.55)}px system-ui,sans-serif`;
+        ctx.fillStyle = "#f8fafc";
+        ctx.strokeStyle = "rgba(0,0,0,0.75)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(pl.name || "", x, y + r + 8);
+        ctx.fillText(pl.name || "", x, y + r + 8);
+      }
+    }
+
+    // 球
+    const bx = px(this.ball.x);
+    const by = py(this.ball.y);
+    const br = Math.max(4, Math.min(w, h) * 0.012);
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, 0, bx, by, br);
+    grad.addColorStop(0, "#fff");
+    grad.addColorStop(1, "#cbd5e1");
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(15,23,42,0.65)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  /** 开始/停止录制 JSON 帧（表现层回放用） */
+  startRecording() {
+    this._rec = { active: true, frames: [], t0: performance.now(), lastPush: 0 };
+    this.recBadgeEl?.classList.remove("hidden");
+  }
+  stopRecording() {
+    if (this._rec) this._rec.active = false;
+    this.recBadgeEl?.classList.add("hidden");
+    return this.getRecording();
+  }
+  getRecording() {
+    return {
+      version: 1,
+      pitch: { w: 100, h: 100 },
+      home: this.home?.short || this.home?.name,
+      away: this.away?.short || this.away?.name,
+      frames: this._rec?.frames || [],
+    };
+  }
+  _pushRecFrame(ts) {
+    if (!this._rec?.active) return;
+    if (ts - (this._rec.lastPush || 0) < 50) return; // ~20fps 采样
+    this._rec.lastPush = ts;
+    this._rec.frames.push({
+      t: Math.round(ts - this._rec.t0),
+      ball: { x: +this.ball.x.toFixed(2), y: +this.ball.y.toFixed(2) },
+      poss: this.possession,
+      players: this.players.map((p) => ({
+        id: p.id,
+        t: p.team,
+        x: +p.x.toFixed(2),
+        y: +p.y.toFixed(2),
+        n: p.num,
+        f: p.fsm,
+      })),
+    });
+    // 防止爆内存：最长约 3 分钟
+    if (this._rec.frames.length > 3600) this._rec.frames.shift();
+  }
+
+  /**
+   * 播放录制 JSON（纯前端回放）
+   * @param {object} data getRecording() 结构
+   * @param {{ speed?: number, sleepFn?: function }} [opts]
+   */
+  async playRecording(data, opts = {}) {
+    const frames = data?.frames || [];
+    if (!frames.length) return;
+    const speed = Math.max(0.25, opts.speed || 1);
+    const sleepFn = opts.sleepFn || ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.phase = "play";
+    this.frozen = true; // 停 AI，只播帧
+    this.scriptLock = true;
+    let prevT = frames[0].t;
+    for (const fr of frames) {
+      const dt = Math.max(0, fr.t - prevT);
+      prevT = fr.t;
+      if (fr.ball) {
+        this.ball.x = fr.ball.x;
+        this.ball.y = fr.ball.y;
+        this.ball.tx = fr.ball.x;
+        this.ball.ty = fr.ball.y;
+      }
+      if (fr.poss) this.possession = fr.poss;
+      const byId = new Map((fr.players || []).map((p) => [p.id, p]));
+      for (const pl of this.players) {
+        const s = byId.get(pl.id);
+        if (!s) continue;
+        pl.x = s.x;
+        pl.y = s.y;
+        pl.tx = s.x;
+        pl.ty = s.y;
+        pl.fsm = s.f || pl.fsm;
+        this._applyPlayer(pl);
+      }
+      this._applyBall();
+      this._updatePossessionChrome();
+      this._drawCanvas();
+      await sleepFn(Math.max(16, (dt || 50) / speed));
+    }
+    this.frozen = false;
+    this.scriptLock = false;
+  }
+
+  /** 导出录制为下载 JSON */
+  downloadRecording(filename = "vcfm-match-rec.json") {
+    const data = this.getRecording();
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   /** 6×8 热区网格（半透明叠层） */
   _initHeatGrid() {
     this.heatCells = [];
@@ -1658,6 +1878,156 @@ export class MatchView {
 
     pl.tx = clamp(pl.x + lateral, 8, 92);
     pl.ty = clamp(pl.y + dir * push * (0.7 + Math.random() * 0.5), 6, 94);
+  }
+
+  /** 是否在对方禁区（含大禁区） */
+  _inOppBox(pl, deep = false) {
+    if (!pl) return false;
+    // 主队攻上（y 小），客队攻下（y 大）
+    if (pl.team === "home") {
+      return deep ? pl.y <= 18 && pl.x >= 28 && pl.x <= 72 : pl.y <= 32 && pl.x >= 18 && pl.x <= 82;
+    }
+    return deep ? pl.y >= 82 && pl.x >= 28 && pl.x <= 72 : pl.y >= 68 && pl.x >= 18 && pl.x <= 82;
+  }
+
+  /** 球门中心与门将位置 */
+  _goalTarget(team) {
+    const attHome = team === "home";
+    const gx = 50 + (Math.random() - 0.5) * 10;
+    const gy = attHome ? 4 + Math.random() * 3 : 96 - Math.random() * 3;
+    return { gx, gy, attHome };
+  }
+
+  /**
+   * 空门 / 禁区射门机会评估 0..1
+   * 越高越该射而不是再传
+   */
+  _shotOpportunity(car) {
+    if (!car) return 0;
+    const { gx, gy } = this._goalTarget(car.team);
+    const dist = Math.hypot(car.x - gx, car.y - gy);
+    const inBox = this._inOppBox(car, false);
+    const inSix = this._inOppBox(car, true);
+    // 门将
+    const gk = this.players.find(
+      (p) =>
+        p.team !== car.team &&
+        p.pos === "GK" &&
+        !p.el.classList.contains("sent-off")
+    );
+    const gkDist = gk ? Math.hypot(gk.x - gx, gk.y - gy) : 99;
+    const gkOut = gk ? Math.hypot(gk.x - car.x, gk.y - car.y) : 99;
+    // 球门前防守人数
+    const blockers = this.players.filter((p) => {
+      if (p.team === car.team || p.pos === "GK" || p.el.classList.contains("sent-off"))
+        return false;
+      // 在射门路线附近
+      const onPath =
+        Math.abs(p.x - car.x) < 14 &&
+        (car.team === "home" ? p.y < car.y && p.y > gy - 2 : p.y > car.y && p.y < gy + 2);
+      return onPath || Math.hypot(p.x - gx, p.y - gy) < 12;
+    }).length;
+
+    let score = 0;
+    if (inSix) score += 0.55;
+    else if (inBox) score += 0.38;
+    else if (dist < 28) score += 0.18;
+    else if (dist < 38) score += 0.08;
+    else return 0;
+
+    // 距离门越近越好
+    score += clamp((36 - dist) / 50, 0, 0.25);
+    // 空门：门将远离球门或远离持球人
+    if (gkDist > 14 || gkOut > 22) score += 0.35;
+    else if (gkDist > 9) score += 0.12;
+    // 无人封堵
+    if (blockers === 0) score += 0.28;
+    else if (blockers === 1) score += 0.08;
+    else score -= 0.12 * (blockers - 1);
+
+    const fin = this._attr(car, "finishing", this._attr(car, "shooting", 10));
+    score += (fin - 10) / 80;
+    if (car.pos === "ATT") score += 0.08;
+    if (car.pos === "DEF") score -= 0.12;
+
+    return clamp(score, 0, 1);
+  }
+
+  /**
+   * 表现层射门（不改比分；真进球仍由 match.js 事件驱动）
+   * 禁区空门应优先调用
+   */
+  _attemptPresentationShot(car, { force = false } = {}) {
+    if (!car || this._isBallInFlight()) return false;
+    const opp = this._shotOpportunity(car);
+    if (!force && opp < 0.28) return false;
+
+    const { gx, gy, attHome } = this._goalTarget(car.team);
+    const fin = this._attr(car, "finishing", this._attr(car, "shooting", 10));
+    // 瞄准：空门更贴中，差射偏一点
+    const scatter = Math.max(0.8, 5.5 - fin / 5 - opp * 3);
+    const tx = clamp(gx + (Math.random() - 0.5) * scatter, 38, 62);
+    const ty = clamp(gy + (Math.random() - 0.5) * (scatter * 0.35), attHome ? 2 : 90, attHome ? 10 : 98);
+
+    this.camMode = "box";
+    this.camBoostUntil = performance.now() + 1100;
+    this._setFocus([car], 1200);
+    this._shootBall(tx, ty, "shot");
+    this.playSfx?.("kick");
+    const en = document.documentElement.lang === "en";
+    const open = opp >= 0.62;
+    this.setCaption(
+      open
+        ? en
+          ? `SHOT! ${car.name || ""} open goal`
+          : `射门！${car.name || ""} 空门机会`
+        : en
+          ? `Shot! ${car.name || ""}`
+          : `射门！${car.name || ""}`,
+      open ? "chance" : "info",
+      1400
+    );
+    // 表现层「扑救/偏出」：球到门前后由门将清走或出底
+    const ms = 420;
+    setTimeout(() => {
+      if (!this._built || this.phase !== "play") return;
+      if (this.ballState === "shot" || this.ballState === "flight") return;
+      const gk = this.players.find(
+        (p) =>
+          p.team !== car.team &&
+          p.pos === "GK" &&
+          !p.el.classList.contains("sent-off")
+      );
+      // 空门：球贴门线；否则门将拿球或解围
+      if (opp >= 0.7 && Math.random() < 0.55) {
+        this.ball.x = tx;
+        this.ball.y = ty;
+        this.ballState = "free";
+        this.carrier = null;
+        this.setCaption(en ? "Off the line…" : "门线附近…", "chance", 900);
+      } else if (gk) {
+        this._setCarrier(gk, { stick: true });
+        this.playSfx?.("save");
+        this.setCaption(en ? "Saved / cleared" : "扑出 / 解围", "save", 1000);
+        // 门将大脚
+        setTimeout(() => {
+          if (this.carrier !== gk) return;
+          const clearY = car.team === "home" ? 55 : 45;
+          this._beginFlight({
+            x: 30 + Math.random() * 40,
+            y: clearY,
+            kind: "pass",
+            ms: 480,
+          });
+          this.carrier = null;
+        }, 380);
+      } else {
+        this.ballState = "free";
+      }
+      this.actionTimer = 0.35;
+    }, ms + 80);
+    this.actionTimer = 0.9;
+    return true;
   }
 
   /**
@@ -1854,15 +2224,36 @@ export class MatchView {
         .sort((a, b) => a.d - b.d);
       let sup = 0;
       const dir = this._attackDir(att);
+      // 边后卫套边 / 后腰拖后
+      const fbs = mates.filter(
+        (m) => m.p.pos === "DEF" && (m.p.baseX < 28 || m.p.baseX > 72)
+      );
+      const dms = mates.filter(
+        (m) => m.p.pos === "MID" && m.p.baseY > (att === "home" ? 45 : 0) && m.p.baseY < (att === "home" ? 100 : 55)
+      );
+      for (const { p } of fbs.slice(0, 2)) {
+        if (Math.random() > 0.55) continue;
+        p.fsm = "support";
+        p.subRole = "overlap";
+        p.tx = clamp(p.baseX + (p.baseX < 50 ? -4 : 4), 6, 94);
+        p.ty = clamp(p.baseY + dir * 10, 8, 90);
+        sup++;
+      }
+      for (const { p } of dms.slice(0, 1)) {
+        p.fsm = "cover";
+        p.subRole = "dm_hold";
+        p.tx = clamp(lerp(p.baseX, 50, 0.25), 20, 80);
+        p.ty = clamp(p.baseY - dir * 2, 20, 80);
+      }
       for (const { p, d, inZ } of mates) {
         if (sup >= 4) break;
+        if (p.fsm === "support" || p.fsm === "cover") continue;
         if (!(inZ || d < 26 || p.pos === "ATT" || p.pos === "MID")) continue;
         p.fsm = "support";
-        // 空档：侧前方
+        p.subRole = p.pos === "ATT" ? "poach" : "link";
         const side = sup % 2 === 0 ? -1 : 1;
         p.tx = clamp(car.x + side * (10 + sup * 3) + (Math.random() - 0.5) * 2, 8, 92);
         p.ty = clamp(car.y + dir * (8 + (p.pos === "ATT" ? 4 : 0)), 6, 94);
-        // 勿抢持球人脚下
         if (Math.hypot(p.tx - car.x, p.ty - car.y) < 5) {
           p.tx = clamp(p.tx + side * 6, 8, 92);
         }
@@ -2071,6 +2462,50 @@ export class MatchView {
       }
     }
 
+    // —— 优先射门：禁区/空门绝不再横传浪费 ——
+    const shotOpp = this._shotOpportunity(car);
+    if (!this._inOppBox(car)) this._boxPassStreak = 0;
+    const forceShot =
+      shotOpp >= 0.58 ||
+      (shotOpp >= 0.4 && (this._boxPassStreak || 0) >= 2) ||
+      (this._inOppBox(car, true) && shotOpp >= 0.32);
+    if (forceShot || (shotOpp >= 0.36 && Math.random() < 0.55 + shotOpp * 0.4)) {
+      if (this._attemptPresentationShot(car, { force: forceShot })) {
+        this._boxPassStreak = 0;
+        return;
+      }
+    }
+
+    // 边路传中：到了底线附近优先传中路而非继续横敲
+    const dir = this._attackDir(car.team);
+    const nearByline =
+      car.team === "home" ? car.y < 24 && (car.x < 28 || car.x > 72) : car.y > 76 && (car.x < 28 || car.x > 72);
+    if (nearByline && car.pos !== "DEF") {
+      const boxMate = this.players
+        .filter(
+          (p) =>
+            p.team === car.team &&
+            p !== car &&
+            p.pos !== "GK" &&
+            !p.el.classList.contains("sent-off") &&
+            Math.abs(p.x - 50) < 22 &&
+            (car.team === "home" ? p.y < 30 : p.y > 70)
+        )
+        .sort((a, b) => Math.hypot(a.x - 50, a.y - (car.team === "home" ? 14 : 86)) - Math.hypot(b.x - 50, b.y - (car.team === "home" ? 14 : 86)))[0];
+      if (boxMate && Math.random() < 0.72) {
+        this._passTo(car, boxMate, { flightMs: 380 });
+        car.fsm = "support";
+        this.setCaption(
+          document.documentElement.lang === "en" ? "Cross!" : "传中！",
+          "info",
+          900
+        );
+        this.actionTimer = 0.45;
+        if (this._inOppBox(car)) this._boxPassStreak = (this._boxPassStreak || 0) + 1;
+        return;
+      }
+    }
+
     const target = this._pickPassTarget(car);
     const passing = this._attr(car, "passing", 10);
     const drib = this._attr(car, "dribbling", 10);
@@ -2087,37 +2522,71 @@ export class MatchView {
     if (phase) {
       if (car.team === phase.side) {
         passChance += 0.08 * phase.intensity;
-        // 更常找前插
       } else {
         passChance = Math.max(passChance, 0.62); // 解围/出球
       }
     }
-    passChance = clamp(passChance, 0.2, 0.88);
+    // 禁区内：显著降低横传概率，逼出射门
+    if (this._inOppBox(car)) {
+      passChance *= 0.42;
+      if ((this._boxPassStreak || 0) >= 2) passChance *= 0.35;
+    }
+    passChance = clamp(passChance, 0.12, 0.88);
 
     if (target && Math.random() < passChance) {
-      const dist = Math.hypot(target.x - car.x, target.y - car.y);
+      // 禁区内禁止传给更身后/更边的浪费球：优先更靠近球门的人
+      let passTo = target;
+      if (this._inOppBox(car)) {
+        const { gy } = this._goalTarget(car.team);
+        const better = this.players
+          .filter(
+            (p) =>
+              p.team === car.team &&
+              p !== car &&
+              p.pos !== "GK" &&
+              !p.el.classList.contains("sent-off") &&
+              Math.hypot(p.x - car.x, p.y - car.y) < 22
+          )
+          .sort(
+            (a, b) =>
+              Math.hypot(a.x - 50, a.y - gy) - Math.hypot(b.x - 50, b.y - gy)
+          )[0];
+        if (better && Math.hypot(better.x - 50, better.y - gy) < Math.hypot(car.x - 50, car.y - gy) - 2) {
+          passTo = better;
+        } else if (shotOpp >= 0.3) {
+          // 没有更好的人 → 射
+          if (this._attemptPresentationShot(car, { force: true })) {
+            this._boxPassStreak = 0;
+            return;
+          }
+        }
+      }
+      const dist = Math.hypot(passTo.x - car.x, passTo.y - car.y);
       const flightMs = clamp(170 + dist * (9.5 - passing / 20), 180, 560);
-      this._passTo(car, target, { flightMs });
+      this._passTo(car, passTo, { flightMs });
+      if (this._inOppBox(car)) this._boxPassStreak = (this._boxPassStreak || 0) + 1;
       // 传球被断（表现）
       if (Math.random() < 0.1 + pressN * 0.035 - passing / 200) {
-        const stealAt = performance.now() + flightMs + 80;
-        const token = stealAt;
         setTimeout(() => {
           if (!this._built || this.phase !== "play") return;
-          // 仅当仍无明确持球或刚接球
           this.possession = car.team === "home" ? "away" : "home";
           this.carrier = null;
           this.ballState = "free";
           this.actionTimer = 0.15;
-          void token;
         }, flightMs + 100);
       } else {
         this.actionTimer = 0.4 + Math.random() * 0.3;
       }
     } else {
+      // 禁区盘带也优先再判一次射门
+      if (this._inOppBox(car) && shotOpp >= 0.28 && Math.random() < 0.65) {
+        if (this._attemptPresentationShot(car, { force: shotOpp >= 0.45 })) {
+          this._boxPassStreak = 0;
+          return;
+        }
+      }
       this._dribbleCarrier();
       this._setTouch(car, 900);
-      // 高 pace 决策更勤（更碎步带球）
       const pace = this._attr(car, "pace", 10);
       this.actionTimer = 0.38 + Math.random() * 0.5 - pace / 80;
     }
@@ -2721,6 +3190,11 @@ export class MatchView {
   destroy() {
     this.stopLoop();
     this.hideFlashCard?.();
+    if (this._onCanvasResize) {
+      window.removeEventListener("resize", this._onCanvasResize);
+      this._onCanvasResize = null;
+    }
+    if (this._rec?.active) this.stopRecording();
     this.root.innerHTML = "";
     this.players = [];
     this.trails = [];
@@ -2735,6 +3209,8 @@ export class MatchView {
     this.aftermathUntil = 0;
     this.attackPhase = null;
     this.flashCardEl = null;
+    this.canvas = null;
+    this._cx = null;
     this._built = false;
   }
 
@@ -2926,6 +3402,9 @@ export class MatchView {
     this.cam.y = lerp(this.cam.y, this.cam.ty, 1 - Math.pow(camEase, d));
     this.cam.scale = lerp(this.cam.scale, this.cam.tScale, 1 - Math.pow(0.05, d));
     this._applyCamera();
+
+    this._drawCanvas();
+    this._pushRecFrame(ts);
 
     this._updateTrails(d);
     this._updateTouchClasses(ts);
@@ -3146,6 +3625,8 @@ export class MatchView {
         this.ball.y = 50;
         this.possession = Math.random() < this.directorBias ? "home" : "away";
         this._applyPossessionBlocks();
+        this._boxPassStreak = 0;
+        if (!this._rec?.active) this.startRecording();
         // 中圈开球：直接交给中场，进入 held 连续 tick
         {
           const pool = this.players.filter(
@@ -3632,6 +4113,7 @@ export class MatchView {
     this._applyBall();
     this.setBanner(lang === "en" ? "Kick-off" : "中圈开球", "info");
     this.setCaption(lang === "en" ? "Restart…" : "开球…", "info", 900);
+    if (!this._rec?.active) this.startRecording();
     if (typeof wait === "function") await wait(380);
 
     const gk = this.players.find(

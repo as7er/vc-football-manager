@@ -201,7 +201,7 @@ import {
   playerAvatarHtml,
   staffAvatarHtml,
   avatarHtml,
-} from "./avatar.js?v=62";
+} from "./avatar.js?v=63";
 
 /** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
@@ -5765,6 +5765,40 @@ function formatRoleReviewHtml(rev) {
 }
 
 function finishMatchUI() {
+  // 结束录制，可下载 JSON 回放
+  try {
+    if (matchView?.stopRecording) {
+      const rec = matchView.stopRecording();
+      if (rec?.frames?.length > 10) {
+        matchView._lastRecording = rec;
+        const en = getLang() === "en";
+        // 战报区附加导出按钮
+        const el = $("#match-report");
+        if (el && !el.querySelector("[data-dl-rec]")) {
+          const bar = document.createElement("div");
+          bar.className = "match-rec-bar";
+          bar.innerHTML = `<button type="button" class="btn small" data-dl-rec>${
+            en ? "Download 2D recording (JSON)" : "下载 2D 录像 JSON"
+          }</button>
+          <button type="button" class="btn small" data-play-rec>${
+            en ? "Replay recording" : "回放录像"
+          }</button>`;
+          el.appendChild(bar);
+          bar.querySelector("[data-dl-rec]").onclick = () => matchView.downloadRecording();
+          bar.querySelector("[data-play-rec]").onclick = async () => {
+            toast(en ? "Playing recording…" : "正在回放录像…");
+            await matchView.playRecording(matchView._lastRecording, {
+              speed: 1.2,
+              sleepFn: (ms) => new Promise((r) => setTimeout(r, ms)),
+            });
+            toast(en ? "Recording done" : "录像回放结束");
+          };
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
   setMatchBusy(false);
   $("#btn-match-continue").disabled = false;
   $("#btn-sim-fast").disabled = true;

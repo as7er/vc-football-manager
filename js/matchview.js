@@ -3230,6 +3230,7 @@ export class MatchView {
       this.cam.y = lerp(this.cam.y, this.cam.ty, 1 - Math.pow(0.05, d));
       this.cam.scale = lerp(this.cam.scale, this.cam.tScale, 1 - Math.pow(0.08, d));
       this._applyCamera();
+      this._drawCanvas();
       this._updateTouchClasses(ts);
       return;
     }

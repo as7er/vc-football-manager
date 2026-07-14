@@ -149,31 +149,35 @@ export class MatchView {
     wrap.className = "mp-wrap";
 
     wrap.innerHTML = `
-      <div class="mp-boards" aria-hidden="true">
-        <span>VCFM</span><span>STADIUM</span><span>MATCHDAY</span><span>LIVE FEED</span>
+      <div class="mp-boards mp-ads" aria-hidden="true">
+        <span>VCFM</span><span>·</span><span>2D MATCH</span><span>·</span><span>LIVE</span>
       </div>
-      <div class="mp-field" id="mp-field">
+      <div class="mp-field mp-fmm2d" id="mp-field">
+        <div class="mp-end-label mp-end-away" id="mp-end-away">AWAY</div>
+        <div class="mp-end-label mp-end-home" id="mp-end-home">HOME</div>
         <div class="mp-camera" id="mp-camera">
           <div class="mp-grass"></div>
+          <div class="mp-goal-mouth top" aria-hidden="true"></div>
+          <div class="mp-goal-mouth bot" aria-hidden="true"></div>
           <svg class="mp-lines" viewBox="0 0 100 150" preserveAspectRatio="none" aria-hidden="true">
-            <rect x="2.5" y="2.5" width="95" height="145" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.55"/>
-            <line x1="2.5" y1="75" x2="97.5" y2="75" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <circle cx="50" cy="75" r="11" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <circle cx="50" cy="75" r="0.7" fill="rgba(255,255,255,0.65)"/>
-            <rect x="20" y="116" width="60" height="31.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <rect x="32" y="130" width="36" height="17.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <path d="M 36 116 A 14 14 0 0 1 64 116" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.4"/>
-            <circle cx="50" cy="126.5" r="0.55" fill="rgba(255,255,255,0.55)"/>
-            <rect x="42" y="145" width="16" height="2.5" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.4"/>
-            <rect x="20" y="2.5" width="60" height="31.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <rect x="32" y="2.5" width="36" height="17.5" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="0.45"/>
-            <path d="M 36 34 A 14 14 0 0 0 64 34" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.4"/>
-            <circle cx="50" cy="23.5" r="0.55" fill="rgba(255,255,255,0.55)"/>
-            <rect x="42" y="2.5" width="16" height="2.5" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.4"/>
-            <path d="M 2.5 6.5 A 4 4 0 0 0 6.5 2.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
-            <path d="M 93.5 2.5 A 4 4 0 0 0 97.5 6.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
-            <path d="M 2.5 143.5 A 4 4 0 0 1 6.5 147.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
-            <path d="M 93.5 147.5 A 4 4 0 0 1 97.5 143.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.4"/>
+            <rect x="3" y="3" width="94" height="144" fill="none" stroke="rgba(255,255,255,0.72)" stroke-width="0.65"/>
+            <line x1="3" y1="75" x2="97" y2="75" stroke="rgba(255,255,255,0.65)" stroke-width="0.55"/>
+            <circle cx="50" cy="75" r="12" fill="none" stroke="rgba(255,255,255,0.62)" stroke-width="0.55"/>
+            <circle cx="50" cy="75" r="0.85" fill="rgba(255,255,255,0.85)"/>
+            <rect x="21" y="117" width="58" height="30" fill="none" stroke="rgba(255,255,255,0.62)" stroke-width="0.55"/>
+            <rect x="33" y="131" width="34" height="16" fill="none" stroke="rgba(255,255,255,0.62)" stroke-width="0.55"/>
+            <path d="M 37 117 A 13 13 0 0 1 63 117" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.5"/>
+            <circle cx="50" cy="127" r="0.6" fill="rgba(255,255,255,0.7)"/>
+            <rect x="43" y="144.2" width="14" height="2.8" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="0.5"/>
+            <rect x="21" y="3" width="58" height="30" fill="none" stroke="rgba(255,255,255,0.62)" stroke-width="0.55"/>
+            <rect x="33" y="3" width="34" height="16" fill="none" stroke="rgba(255,255,255,0.62)" stroke-width="0.55"/>
+            <path d="M 37 33 A 13 13 0 0 0 63 33" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.5"/>
+            <circle cx="50" cy="23" r="0.6" fill="rgba(255,255,255,0.7)"/>
+            <rect x="43" y="3" width="14" height="2.8" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="0.5"/>
+            <path d="M 3 7.2 A 4.2 4.2 0 0 0 7.2 3" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
+            <path d="M 92.8 3 A 4.2 4.2 0 0 0 97 7.2" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
+            <path d="M 3 142.8 A 4.2 4.2 0 0 1 7.2 147" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
+            <path d="M 92.8 147 A 4.2 4.2 0 0 1 97 142.8" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
           </svg>
           <div class="mp-heat" id="mp-heat" aria-hidden="true"></div>
           <svg class="mp-press" id="mp-press" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -185,7 +189,7 @@ export class MatchView {
         <div class="mp-banner hidden" id="mp-banner"></div>
         <div class="mp-caption hidden" id="mp-caption" aria-live="polite"></div>
         <div class="mp-flash-card hidden" id="mp-flash-card" aria-live="polite"></div>
-        <div class="mp-tip" id="mp-tip">点击球员查看属性</div>
+        <div class="mp-tip" id="mp-tip">点击球员查看 · FMM 2D</div>
         <div class="mp-card hidden" id="mp-card"></div>
       </div>
       <div class="mp-live-strip" id="mp-live-strip" aria-hidden="true">
@@ -291,6 +295,11 @@ export class MatchView {
       legA.textContent = away.short || away.name;
       legA.previousElementSibling.style.background = awayPrimary;
     }
+    // 球门方向标签（主队守下半场，客队守上半场 — 经典 FM 2D）
+    const endH = wrap.querySelector("#mp-end-home");
+    const endA = wrap.querySelector("#mp-end-away");
+    if (endH) endH.textContent = (home.short || home.name || "HOME").slice(0, 10);
+    if (endA) endA.textContent = (away.short || away.name || "AWAY").slice(0, 10);
 
     this.players = [];
     this._spawnTeam(
@@ -1311,9 +1320,10 @@ export class MatchView {
       const name = p
         ? playerDisplaySurname(p.name, p.nationality)
         : "?";
-      // FMM：圆点 + 号码 + 短名
+      // FMM 2D：队服色圆点 + 号码为主；短名仅在持球/焦点时显示（CSS）
       el.innerHTML = `
-        <div class="mp-dot" style="background:${color};color:${numColor};border-color:${isHome ? "rgba(255,255,255,0.85)" : "rgba(15,23,42,0.5)"}">
+        <div class="mp-shadow" aria-hidden="true"></div>
+        <div class="mp-dot" style="background:${color};color:${numColor}">
           <span class="mp-num">${num}</span>
         </div>
         <div class="mp-name">${escapeHtml(name)}</div>
@@ -2233,6 +2243,16 @@ export class MatchView {
   _applyPlayer(pl) {
     pl.el.style.left = `${pl.x}%`;
     pl.el.style.top = `${pl.y}%`;
+    // FMM：默认隐藏姓名，持球/高亮时显示
+    const showName =
+      pl.el.classList.contains("has-ball") ||
+      pl.el.classList.contains("highlight") ||
+      pl.el.classList.contains("selected") ||
+      pl.el.classList.contains("mp-focus") ||
+      pl.el.classList.contains("scorer") ||
+      this.phase === "pre" ||
+      this.phase === "pause";
+    pl.el.classList.toggle("show-name", showName);
   }
 
   _applyBall() {
@@ -2268,9 +2288,9 @@ export class MatchView {
       this.cam.ty = clamp(-oy * 2.0, -2.8, 2.8);
       this.cam.tScale = performance.now() < this.camBoostUntil ? 1.05 : 1.03;
     } else {
-      // wide：几乎整场，极轻跟随
-      this.cam.tx = clamp(-ox * 1.0, -1.6, 1.6);
-      this.cam.ty = clamp(-oy * 0.85, -1.4, 1.4);
+      // wide：FMM 全场观感，几乎不晃
+      this.cam.tx = clamp(-ox * 0.55, -1.0, 1.0);
+      this.cam.ty = clamp(-oy * 0.45, -0.85, 0.85);
       this.cam.tScale = 1.0;
     }
   }

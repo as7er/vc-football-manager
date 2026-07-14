@@ -2,7 +2,7 @@
 
 > 仓库：https://github.com/as7er/vcfm.git · `master`  
 > 预览：`python -m http.server 8765 --bind 127.0.0.1`  
-> 缓存：**vcfm-v59**
+> 缓存：**vcfm-v60**（2D 比赛画面 FMM 风格强化）
 
 ## 已完成路线
 

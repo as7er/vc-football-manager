@@ -159,6 +159,9 @@ export class MatchView {
           <div class="mp-grass"></div>
           <div class="mp-goal-mouth top" aria-hidden="true"></div>
           <div class="mp-goal-mouth bot" aria-hidden="true"></div>
+          <div class="mp-poss-half" id="mp-poss-half" aria-hidden="true"></div>
+          <div class="mp-form-zones" id="mp-form-zones" aria-hidden="true"></div>
+          <div class="mp-attack-arrow" id="mp-attack-arrow" aria-hidden="true"></div>
           <svg class="mp-lines" viewBox="0 0 100 150" preserveAspectRatio="none" aria-hidden="true">
             <rect x="3" y="3" width="94" height="144" fill="none" stroke="rgba(255,255,255,0.72)" stroke-width="0.65"/>
             <line x1="3" y1="75" x2="97" y2="75" stroke="rgba(255,255,255,0.65)" stroke-width="0.55"/>
@@ -183,9 +186,12 @@ export class MatchView {
           <svg class="mp-press" id="mp-press" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <svg class="mp-network" id="mp-network" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <svg class="mp-trails" id="mp-trails" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="mp-bench-lane home" id="mp-bench-home" aria-hidden="true"></div>
+          <div class="mp-bench-lane away" id="mp-bench-away" aria-hidden="true"></div>
           <div class="mp-actors" id="mp-actors"></div>
           <div class="mp-fx" id="mp-fx"></div>
         </div>
+        <div class="mp-replay-badge hidden" id="mp-replay-badge">▶ REPLAY</div>
         <div class="mp-banner hidden" id="mp-banner"></div>
         <div class="mp-caption hidden" id="mp-caption" aria-live="polite"></div>
         <div class="mp-flash-card hidden" id="mp-flash-card" aria-live="polite"></div>
@@ -239,6 +245,12 @@ export class MatchView {
     this.liveStripEl = wrap.querySelector("#mp-live-strip");
     this.tipEl = wrap.querySelector("#mp-tip");
     this.cardEl = wrap.querySelector("#mp-card");
+    this.possHalfEl = wrap.querySelector("#mp-poss-half");
+    this.formZonesEl = wrap.querySelector("#mp-form-zones");
+    this.attackArrowEl = wrap.querySelector("#mp-attack-arrow");
+    this.replayBadgeEl = wrap.querySelector("#mp-replay-badge");
+    this.benchHomeEl = wrap.querySelector("#mp-bench-home");
+    this.benchAwayEl = wrap.querySelector("#mp-bench-away");
     this.focusIds = new Set();
     this.focusUntil = 0;
     this.aftermathUntil = 0;
@@ -310,6 +322,9 @@ export class MatchView {
       homeKit.numberColor || contrastText(homeKit.primary)
     );
     this._spawnTeam(actors, away, false, awayPrimary, contrastText(awayPrimary));
+    this._spawnBench(home, true, homeKit.primary, homeKit.numberColor || contrastText(homeKit.primary));
+    this._spawnBench(away, false, awayPrimary, contrastText(awayPrimary));
+    this._buildFormationZones();
 
     const ballEl = document.createElement("div");
     ballEl.className = "mp-ball";
@@ -319,6 +334,7 @@ export class MatchView {
 
     this.cam = { x: 0, y: 0, tx: 0, ty: 0, scale: 1, tScale: 1 };
     this._applyCamera();
+    this._updatePossessionChrome();
 
     this._built = true;
     // 赛前站位：静止，等 kickoff 再进入 play（修复未开赛就跑动）
@@ -1132,13 +1148,14 @@ export class MatchView {
    */
   _nudgeAttackShape(team, amount = 0.4) {
     const dir = this._attackDir(team);
-    const a = clamp(amount, 0.15, 0.8);
+    const a = clamp(amount, 0.1, 0.65);
     for (const pl of this.players) {
       if (pl.team !== team || pl.el.classList.contains("sent-off")) continue;
       if (pl === this.carrier) continue;
-      let push = pl.pos === "ATT" ? 6 : pl.pos === "MID" ? 4 : pl.pos === "DEF" ? 1.5 : 0.2;
-      pl.tx = clamp(lerp(pl.x, pl.baseX + (Math.random() - 0.5) * 4, 0.25), 6, 94);
-      pl.ty = clamp(pl.y + dir * push * a + (Math.random() - 0.5) * 1.5, 5, 95);
+      const push = pl.pos === "ATT" ? 4.5 : pl.pos === "MID" ? 3 : pl.pos === "DEF" ? 1.1 : 0.15;
+      // 以 base 为主，轻微前压 — 更贴阵型
+      pl.tx = clamp(lerp(pl.baseX, pl.x, 0.15) + (Math.random() - 0.5) * 1.2, 6, 94);
+      pl.ty = clamp(pl.baseY + dir * push * a + (Math.random() - 0.5) * 0.8, 5, 95);
     }
   }
 
@@ -1155,12 +1172,26 @@ export class MatchView {
     for (let i = 0; i < defs.length; i++) {
       const pl = defs[i];
       if (i < 2) {
-        pl.tx = clamp(tx + (Math.random() - 0.5) * 8, 8, 92);
-        pl.ty = clamp(ty + (Math.random() - 0.5) * 6, 8, 92);
+        pl.tx = clamp(lerp(pl.baseX, tx, 0.35) + (Math.random() - 0.5) * 3, 8, 92);
+        pl.ty = clamp(lerp(pl.baseY, ty, 0.3) + (Math.random() - 0.5) * 2.5, 8, 92);
       } else if (i < 5) {
-        pl.tx = clamp(lerp(pl.x, tx, 0.25) + (Math.random() - 0.5) * 6, 8, 92);
-        pl.ty = clamp(lerp(pl.y, ty, 0.2) + (Math.random() - 0.5) * 4, 8, 92);
+        pl.tx = clamp(lerp(pl.baseX, tx, 0.18) + (Math.random() - 0.5) * 2.5, 8, 92);
+        pl.ty = clamp(lerp(pl.baseY, ty, 0.15) + (Math.random() - 0.5) * 2, 8, 92);
+      } else {
+        pl.tx = clamp(lerp(pl.x, pl.baseX, 0.4), 6, 94);
+        pl.ty = clamp(lerp(pl.y, pl.baseY, 0.35), 5, 95);
       }
+    }
+  }
+
+  /** 把无人球球员轻轻拉回阵型位 */
+  _pullTowardBase(amount = 0.15) {
+    const a = clamp(amount, 0.05, 0.4);
+    for (const pl of this.players) {
+      if (pl.el.classList.contains("sent-off")) continue;
+      if (pl === this.carrier) continue;
+      pl.tx = clamp(lerp(pl.tx, pl.baseX, a), 5, 95);
+      pl.ty = clamp(lerp(pl.ty, pl.baseY, a * 0.85), 5, 95);
     }
   }
 
@@ -1203,6 +1234,7 @@ export class MatchView {
       this.attackPhase = { side: s, until: now + ms, intensity };
     }
     this.possession = s;
+    this._updatePossessionChrome();
     this._nudgeAttackShape(s, 0.35 + intensity * 0.35);
     this._nudgeDefendShape(s === "home" ? "away" : "home", this.carrier || this.ball);
     if (opts.caption !== false && Math.random() < 0.55) {
@@ -1343,7 +1375,8 @@ export class MatchView {
         }
       });
 
-      const jitter = () => (Math.random() - 0.5) * 2.5;
+      // FMM：站位贴阵型，仅极轻抖动
+      const jitter = () => (Math.random() - 0.5) * 0.7;
       const baseX = clamp(pos.x + jitter(), 4, 96);
       const baseY = clamp(pos.y + jitter(), 4, 96);
       this.players.push({
@@ -1366,6 +1399,89 @@ export class MatchView {
       });
       this._applyPlayer(this.players[this.players.length - 1]);
     }
+  }
+
+  /** 侧边替补席（FMM 感：小板凳一列） */
+  _spawnBench(club, isHome, color, numColor) {
+    const lane = isHome ? this.benchHomeEl : this.benchAwayEl;
+    if (!lane || !club) return;
+    lane.innerHTML = "";
+    const form = FORMATIONS[club.tactics?.formation] || FORMATIONS["4-3-3"];
+    const xi = new Set((getLineupPlayers(club) || []).map((p) => p?.id).filter(Boolean));
+    const bench = (club.players || [])
+      .filter((p) => p && !xi.has(p.id) && (p.injured || 0) <= 0)
+      .sort((a, b) => (b.ovr || 0) - (a.ovr || 0))
+      .slice(0, 7);
+    if (!bench.length) {
+      lane.classList.add("empty");
+      return;
+    }
+    lane.classList.remove("empty");
+    for (const p of bench) {
+      const el = document.createElement("div");
+      el.className = `mp-bench-chip ${isHome ? "home" : "away"}`;
+      el.title = p.name || "";
+      el.innerHTML = `<span class="mp-bench-dot" style="background:${color};color:${numColor}">${p.number ?? "·"}</span>`;
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._selectPlayer(p.id, isHome ? "home" : "away", p, club);
+      });
+      lane.appendChild(el);
+    }
+  }
+
+  /** 阵型半透明色块（按 DEF/MID/ATT 区域） */
+  _buildFormationZones() {
+    if (!this.formZonesEl) return;
+    this.formZonesEl.innerHTML = "";
+    const addZones = (club, isHome, teamClass) => {
+      if (!club) return;
+      const form = FORMATIONS[club.tactics?.formation] || FORMATIONS["4-3-3"];
+      const byPos = { DEF: [], MID: [], ATT: [] };
+      for (const slot of form.slots || []) {
+        if (!byPos[slot.pos]) continue;
+        const p = slotToPitch(slot, isHome);
+        byPos[slot.pos].push(p);
+      }
+      for (const pos of ["DEF", "MID", "ATT"]) {
+        const pts = byPos[pos];
+        if (!pts.length) continue;
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const pad = pos === "MID" ? 7 : 6;
+        const minX = clamp(Math.min(...xs) - pad, 2, 90);
+        const maxX = clamp(Math.max(...xs) + pad, 10, 98);
+        const minY = clamp(Math.min(...ys) - pad * 0.85, 2, 90);
+        const maxY = clamp(Math.max(...ys) + pad * 0.85, 10, 98);
+        const el = document.createElement("div");
+        el.className = `mp-zone ${teamClass} pos-${pos.toLowerCase()}`;
+        el.style.left = `${minX}%`;
+        el.style.top = `${minY}%`;
+        el.style.width = `${Math.max(8, maxX - minX)}%`;
+        el.style.height = `${Math.max(8, maxY - minY)}%`;
+        this.formZonesEl.appendChild(el);
+      }
+    };
+    addZones(this.home, true, "home");
+    addZones(this.away, false, "away");
+  }
+
+  /** 控球半场高亮 + 进攻方向箭头 */
+  _updatePossessionChrome() {
+    if (!this._built) return;
+    const side = this.possession === "away" ? "away" : "home";
+    // 主队向上攻（y 减小），客队向下攻
+    if (this.possHalfEl) {
+      this.possHalfEl.className = `mp-poss-half side-${side}`;
+      // 进攻方向的半场更亮：主队攻上半场
+      this.possHalfEl.dataset.dir = side === "home" ? "up" : "down";
+    }
+    if (this.attackArrowEl) {
+      this.attackArrowEl.className = `mp-attack-arrow side-${side}`;
+      this.attackArrowEl.classList.toggle("show", this.phase === "play" && !this.frozen);
+    }
+    this.fieldEl?.classList.toggle("mp-poss-home", side === "home");
+    this.fieldEl?.classList.toggle("mp-poss-away", side === "away");
   }
 
   /** 6×8 热区网格（半透明叠层） */
@@ -1453,6 +1569,7 @@ export class MatchView {
       this.ball.x = pl.x;
       this.ball.y = pl.y;
     }
+    this._updatePossessionChrome();
   }
 
   _clearCarrier() {
@@ -1603,19 +1720,19 @@ export class MatchView {
         Math.hypot(b.x - car.x, b.y - car.y) - this._attr(b, "tackling", 10) * 0.35;
       return da - db;
     });
-    // 最近 2 人紧逼
+    // 最近 2 人紧逼（幅度收敛）
     for (let i = 0; i < Math.min(2, defs.length); i++) {
       const pl = defs[i];
       const tight = 0.5 + this._attr(pl, "tackling", 10) / 40;
-      pl.tx = clamp(car.x + (Math.random() - 0.5) * (5 / tight), 6, 94);
-      pl.ty = clamp(car.y + (Math.random() - 0.5) * (4 / tight), 6, 94);
+      pl.tx = clamp(car.x + (Math.random() - 0.5) * (3.2 / tight), 6, 94);
+      pl.ty = clamp(car.y + (Math.random() - 0.5) * (2.6 / tight), 6, 94);
     }
-    // 协防线
+    // 协防线：更贴 base
     for (let i = 2; i < Math.min(5, defs.length); i++) {
       const pl = defs[i];
       const coverDir = this._attackDir(car.team);
-      pl.tx = clamp(pl.baseX * 0.35 + car.x * 0.4 + 50 * 0.25 + (Math.random() - 0.5) * 8, 8, 92);
-      pl.ty = clamp(pl.baseY + coverDir * 2.5 + (Math.random() - 0.5) * 4, 6, 94);
+      pl.tx = clamp(pl.baseX * 0.55 + car.x * 0.28 + 50 * 0.17 + (Math.random() - 0.5) * 3, 8, 92);
+      pl.ty = clamp(pl.baseY + coverDir * 1.8 + (Math.random() - 0.5) * 2, 6, 94);
     }
   }
 
@@ -2573,41 +2690,43 @@ export class MatchView {
         this._pressCarrier();
       }
 
-      // 阵型：低频轻推目标，避免整队突然跳位
+      // 阵型：更低频、更轻推，贴阵型位
       this.shapeTimer -= d;
       if (this.shapeTimer <= 0) {
-        this.shapeTimer = 3.2 + Math.random() * 1.6;
-        this._nudgeAttackShape(this.possession, 0.28);
+        this.shapeTimer = 4.2 + Math.random() * 1.8;
+        this._nudgeAttackShape(this.possession, 0.16);
         this._nudgeDefendShape(
           this.possession === "home" ? "away" : "home",
           this.carrier || this.ball
         );
+        this._pullTowardBase(0.12);
         this._supportRuns();
         this._pressCarrier();
+        this._updatePossessionChrome();
       }
 
-      // 日常镜头偏 wide；仅很深推进时才 ball，且更快退回
+      // 日常镜头偏 wide；仅很深推进时才 ball
       if (this.camMode === "wide" && this.carrier) {
         const prog =
           this.carrier.team === "home" ? 100 - this.carrier.y : this.carrier.y;
-        if (prog > 72) this.camMode = "ball";
+        if (prog > 78) this.camMode = "ball";
       }
       if (this.camMode === "ball" && this.carrier && performance.now() >= this.camBoostUntil) {
         const prog =
           this.carrier.team === "home" ? 100 - this.carrier.y : this.carrier.y;
-        if (prog < 62) this.camMode = "wide";
+        if (prog < 68) this.camMode = "wide";
       }
 
       for (const pl of this.players) {
         if (pl.el.classList.contains("sent-off")) continue;
         const mul = this._speedMul(pl);
-        // FMM 观感：整体偏稳，持球略快，无球别「满场飞」
-        let speed = 9 * mul;
-        if (pl === this.carrier) speed = 16 * mul;
-        else if (this.carrier && pl.team === this.carrier.team) speed = 12 * mul;
+        // FMM：整体更稳，无球别满场飞
+        let speed = 7.5 * mul;
+        if (pl === this.carrier) speed = 14 * mul;
+        else if (this.carrier && pl.team === this.carrier.team) speed = 10 * mul;
         else if (this.carrier && pl.team !== this.carrier.team && pl.pos !== "GK")
-          speed = 13 * mul;
-        else if (pl.pos === "GK") speed = 6;
+          speed = 11 * mul;
+        else if (pl.pos === "GK") speed = 5.5;
         this._moveToward(pl, speed, d);
         this._applyPlayer(pl);
         pl.heatAcc = (pl.heatAcc || 0) + d;
@@ -3362,7 +3481,8 @@ export class MatchView {
 
   /** 进球后中圈开球：失球方门将拿球再轻传，少硬切 */
   async _restartAfterGoal(attHome, { wait, lang = "zh" } = {}) {
-    this.fieldEl?.classList.remove("mp-replay");
+    this.fieldEl?.classList.remove("mp-replay", "mp-replay-slow");
+    this.replayBadgeEl?.classList.add("hidden");
     this.phase = "play";
     this.camMode = "wide";
     this.camBoostUntil = performance.now() + 600;
@@ -3376,6 +3496,7 @@ export class MatchView {
     const kickSide = attHome ? "away" : "home";
     this.possession = kickSide;
     this._resetShape();
+    this._updatePossessionChrome();
     // 球先到中圈，再交给门将附近后卫
     this.ball.x = 50;
     this.ball.y = 50;
@@ -3580,9 +3701,11 @@ export class MatchView {
     if (this.ballState === "shot") this.ballState = "free";
     this.possession = team;
     this.fieldEl?.classList.add("mp-replay");
+    this.fieldEl?.classList.toggle("mp-replay-slow", !!isRewatch);
     // 停掉进行中的攻势段落，避免高光被 tick 抢控球
     this.attackPhase = null;
     this.aftermathUntil = 0;
+    this._updatePossessionChrome();
 
     const scorer =
       this.players.find((p) => p.id === ev.playerId) ||
@@ -3622,8 +3745,15 @@ export class MatchView {
       ballY = this.ball.y;
     }
 
-    const pace = Math.max(0.55, Math.min(1.35, 1 / Math.max(0.5, speed)));
-    const wait = (ms) => sleepFn(Math.max(45, ms * pace));
+    // 回看明显更慢；直播进球高光也略拉长
+    const basePace = Math.max(0.55, Math.min(1.35, 1 / Math.max(0.5, speed)));
+    const pace = isRewatch ? basePace * 1.55 : basePace * 1.12;
+    const wait = (ms) => sleepFn(Math.max(55, ms * pace));
+    this.replayBadgeEl?.classList.toggle("hidden", !isRewatch);
+    if (isRewatch && this.replayBadgeEl) {
+      this.replayBadgeEl.textContent =
+        lang === "en" ? "▶ REPLAY · SLOW" : "▶ 进球回放 · 慢镜";
+    }
     const boxY = attHome ? 18 : 82;
     const { gx, gy } = this._goalMouth(attHome, { deep: true });
 

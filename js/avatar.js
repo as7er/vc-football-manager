@@ -2,9 +2,10 @@
  * 程序生成 SVG 小人形象（球员 / 职员 / 经理）
  * 由 id 种子稳定生成；表情随状态变化（开心 / 受伤等）。
  * v2 polish：中性灰背景 + 球衣强制对比/双描边、发型/肤色拉开、五官高光。
+ * v3：小尺寸（列表/战术板 ≤32px）用紧凑五官，避免缩成「黑脸大眼珠」。
  */
 
-/** 肤色：偏浅 → 中 → 深，拉开区分度 */
+/** 肤色：偏浅 → 中 → 深；刻意不含近黑，缩小时仍像人脸 */
 const SKINS = [
   "#ffe0c2",
   "#f5d0b0",
@@ -13,8 +14,7 @@ const SKINS = [
   "#c68642",
   "#a86f3a",
   "#8d5524",
-  "#6b3f1f",
-  "#4a2c14",
+  "#7a4a28",
 ];
 /** 发色 */
 const HAIRS = [
@@ -153,94 +153,121 @@ export function moodFromPlayer(player) {
   return "neutral";
 }
 
-/** 五官：眼高光 + 眉 + 嘴 + 可选绷带/汗 */
-function faceFeatures(mood, hair, browY, skin) {
+/** 五官：眼高光 + 眉 + 嘴 + 可选绷带/汗；compact 时缩小眼白，避免战术板「大眼珠」 */
+function faceFeatures(mood, hair, browY, skin, compact = false) {
   const brow = shiftHex(hair, -10);
   const lip = mixHex("#b4534a", skin, 0.25);
   let eyes = "";
   let brows = "";
   let mouth = "";
   let extra = "";
+  const sw = compact ? 1.05 : 1.35;
+  const browW = compact ? 1.05 : 1.25;
 
   // 眼白 + 瞳孔 + 高光（通用积木）
+  // 大尺寸可带眼白；小尺寸只用小圆点+高光，否则缩成两颗「白球黑珠」
   const eyePair = (ly, ry, open = true) => {
     if (!open) {
       return `
-        <path d="M16.5 ${ly} H21.5" stroke="#1e293b" stroke-width="1.45" stroke-linecap="round"/>
-        <path d="M26.5 ${ry} H31.5" stroke="#1e293b" stroke-width="1.45" stroke-linecap="round"/>
+        <path d="M17 ${ly} H21" stroke="#1e293b" stroke-width="${sw}" stroke-linecap="round"/>
+        <path d="M27 ${ry} H31" stroke="#1e293b" stroke-width="${sw}" stroke-linecap="round"/>
+      `;
+    }
+    if (compact) {
+      return `
+        <circle cx="19" cy="${ly}" r="1.15" fill="#1e293b"/>
+        <circle cx="29" cy="${ry}" r="1.15" fill="#1e293b"/>
+        <circle cx="19.35" cy="${ly - 0.35}" r="0.32" fill="#fff" opacity="0.9"/>
+        <circle cx="29.35" cy="${ry - 0.35}" r="0.32" fill="#fff" opacity="0.9"/>
       `;
     }
     return `
-      <ellipse cx="19" cy="${ly}" rx="2.4" ry="2.7" fill="#f8fafc"/>
-      <ellipse cx="29" cy="${ry}" rx="2.4" ry="2.7" fill="#f8fafc"/>
-      <circle cx="19.2" cy="${ly + 0.15}" r="1.25" fill="#1e293b"/>
-      <circle cx="29.2" cy="${ry + 0.15}" r="1.25" fill="#1e293b"/>
-      <circle cx="19.7" cy="${ly - 0.45}" r="0.45" fill="#fff" opacity="0.9"/>
-      <circle cx="29.7" cy="${ry - 0.45}" r="0.45" fill="#fff" opacity="0.9"/>
+      <ellipse cx="19" cy="${ly}" rx="2.05" ry="2.25" fill="#f8fafc"/>
+      <ellipse cx="29" cy="${ry}" rx="2.05" ry="2.25" fill="#f8fafc"/>
+      <circle cx="19.15" cy="${ly + 0.1}" r="1.05" fill="#1e293b"/>
+      <circle cx="29.15" cy="${ry + 0.1}" r="1.05" fill="#1e293b"/>
+      <circle cx="19.55" cy="${ly - 0.4}" r="0.38" fill="#fff" opacity="0.9"/>
+      <circle cx="29.55" cy="${ry - 0.4}" r="0.38" fill="#fff" opacity="0.9"/>
     `;
   };
 
   if (mood === "injured") {
-    eyes = `
-      <path d="M16.5 20.5 L21.5 22.5 M21.5 20.5 L16.5 22.5" stroke="#1e293b" stroke-width="1.35" stroke-linecap="round"/>
-      <ellipse cx="29" cy="21.5" rx="2.2" ry="2.4" fill="#f8fafc"/>
-      <circle cx="29.1" cy="21.6" r="1.15" fill="#1e293b"/>
-      <circle cx="29.55" cy="21.1" r="0.4" fill="#fff" opacity="0.85"/>
-    `;
+    if (compact) {
+      eyes = `
+        <path d="M17 20.8 L21 22.6 M21 20.8 L17 22.6" stroke="#1e293b" stroke-width="${sw}" stroke-linecap="round"/>
+        <circle cx="29" cy="21.5" r="1.1" fill="#1e293b"/>
+        <circle cx="29.3" cy="21.15" r="0.3" fill="#fff" opacity="0.85"/>
+      `;
+    } else {
+      eyes = `
+        <path d="M16.5 20.5 L21.5 22.5 M21.5 20.5 L16.5 22.5" stroke="#1e293b" stroke-width="1.35" stroke-linecap="round"/>
+        <ellipse cx="29" cy="21.5" rx="2.0" ry="2.15" fill="#f8fafc"/>
+        <circle cx="29.1" cy="21.6" r="1.0" fill="#1e293b"/>
+        <circle cx="29.5" cy="21.15" r="0.35" fill="#fff" opacity="0.85"/>
+      `;
+    }
     brows = `
-      <path d="M15 17.5 L22 19" stroke="${brow}" stroke-width="1.35" stroke-linecap="round"/>
-      <path d="M27 18.5 L33 17" stroke="${brow}" stroke-width="1.35" stroke-linecap="round"/>
+      <path d="M15 17.5 L22 19" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
+      <path d="M27 18.5 L33 17" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
     `;
-    mouth = `<path d="M20 27.5 Q24 25 28 27.5" stroke="${lip}" stroke-width="1.25" fill="none" stroke-linecap="round"/>`;
-    extra = `
-      <path d="M10 14 L18 8 L22 12 L14 18 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.6"/>
-      <path d="M12 15 L20 9" stroke="#ef4444" stroke-width="1.1"/>
-      <path d="M14 17 L22 11" stroke="#ef4444" stroke-width="1.1"/>
-    `;
+    mouth = `<path d="M20 27.5 Q24 25 28 27.5" stroke="${lip}" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
+    if (!compact) {
+      extra = `
+        <path d="M10 14 L18 8 L22 12 L14 18 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.6"/>
+        <path d="M12 15 L20 9" stroke="#ef4444" stroke-width="1.1"/>
+        <path d="M14 17 L22 11" stroke="#ef4444" stroke-width="1.1"/>
+      `;
+    } else {
+      extra = `<path d="M12 14 L17 10 L19 12 L14 16 Z" fill="#f8fafc" stroke="#ef4444" stroke-width="0.7"/>`;
+    }
   } else if (mood === "happy") {
     eyes = `
-      <path d="M16 21.5 Q19 18.2 22 21.5" stroke="#1e293b" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-      <path d="M26 21.5 Q29 18.2 32 21.5" stroke="#1e293b" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M16.5 21.3 Q19 18.6 21.5 21.3" stroke="#1e293b" stroke-width="${compact ? 1.25 : 1.45}" fill="none" stroke-linecap="round"/>
+      <path d="M26.5 21.3 Q29 18.6 31.5 21.3" stroke="#1e293b" stroke-width="${compact ? 1.25 : 1.45}" fill="none" stroke-linecap="round"/>
     `;
     brows = `
-      <path d="M16 ${browY - 0.6} H21" stroke="${brow}" stroke-width="1.25" stroke-linecap="round"/>
-      <path d="M27 ${browY - 0.6} H32" stroke="${brow}" stroke-width="1.25" stroke-linecap="round"/>
+      <path d="M16 ${browY - 0.6} H21" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
+      <path d="M27 ${browY - 0.6} H32" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
     `;
     mouth = `
-      <path d="M18 25.5 Q24 31.5 30 25.5" stroke="${lip}" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-      <path d="M20.5 26.2 Q24 30 27.5 26.2" fill="#fca5a5" opacity="0.5"/>
+      <path d="M18.5 25.8 Q24 30.5 29.5 25.8" stroke="${lip}" stroke-width="${compact ? 1.15 : 1.35}" fill="none" stroke-linecap="round"/>
+      ${compact ? "" : `<path d="M20.5 26.2 Q24 30 27.5 26.2" fill="#fca5a5" opacity="0.5"/>`}
     `;
   } else if (mood === "sad") {
     eyes = eyePair(21.8, 21.8);
     brows = `
-      <path d="M15 19 L22 17.3" stroke="${brow}" stroke-width="1.3" stroke-linecap="round"/>
-      <path d="M26 17.3 L33 19" stroke="${brow}" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M15 19 L22 17.3" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
+      <path d="M26 17.3 L33 19" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
     `;
-    mouth = `<path d="M20 28 Q24 25.2 28 28" stroke="${lip}" stroke-width="1.25" fill="none" stroke-linecap="round"/>`;
-    extra = `<path d="M17 24.5 Q19 26 21 24.5" stroke="#7dd3fc" stroke-width="1" fill="none" opacity="0.85"/>`;
+    mouth = `<path d="M20 28 Q24 25.2 28 28" stroke="${lip}" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
+    if (!compact) {
+      extra = `<path d="M17 24.5 Q19 26 21 24.5" stroke="#7dd3fc" stroke-width="1" fill="none" opacity="0.85"/>`;
+    }
   } else if (mood === "tired") {
     eyes = `
-      ${eyePair(22.2, 22.2)}
-      <path d="M16.2 20.2 H21.8" stroke="#1e293b" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
-      <path d="M26.2 20.2 H31.8" stroke="#1e293b" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+      ${eyePair(22.0, 22.0)}
+      <path d="M16.5 20.4 H21.5" stroke="#1e293b" stroke-width="0.95" stroke-linecap="round" opacity="0.5"/>
+      <path d="M26.5 20.4 H31.5" stroke="#1e293b" stroke-width="0.95" stroke-linecap="round" opacity="0.5"/>
     `;
     brows = `
-      <path d="M16 ${browY + 0.6} H21" stroke="${brow}" stroke-width="1.15" stroke-linecap="round"/>
-      <path d="M27 ${browY + 0.6} H32" stroke="${brow}" stroke-width="1.15" stroke-linecap="round"/>
+      <path d="M16 ${browY + 0.6} H21" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
+      <path d="M27 ${browY + 0.6} H32" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
     `;
-    mouth = `<path d="M20 26.8 H28" stroke="${lip}" stroke-width="1.2" stroke-linecap="round"/>`;
-    extra = `
-      <circle cx="34.5" cy="15.5" r="1.15" fill="#7dd3fc" opacity="0.9"/>
-      <circle cx="37" cy="18.5" r="0.9" fill="#7dd3fc" opacity="0.7"/>
-      <circle cx="35.5" cy="20.5" r="0.55" fill="#7dd3fc" opacity="0.5"/>
-    `;
+    mouth = `<path d="M20 26.8 H28" stroke="${lip}" stroke-width="${sw}" stroke-linecap="round"/>`;
+    if (!compact) {
+      extra = `
+        <circle cx="34.5" cy="15.5" r="1.15" fill="#7dd3fc" opacity="0.9"/>
+        <circle cx="37" cy="18.5" r="0.9" fill="#7dd3fc" opacity="0.7"/>
+        <circle cx="35.5" cy="20.5" r="0.55" fill="#7dd3fc" opacity="0.5"/>
+      `;
+    }
   } else {
     eyes = eyePair(21, 21);
     brows = `
-      <path d="M16 ${browY} H21" stroke="${brow}" stroke-width="1.25" stroke-linecap="round"/>
-      <path d="M27 ${browY} H32" stroke="${brow}" stroke-width="1.25" stroke-linecap="round"/>
+      <path d="M16 ${browY} H21" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
+      <path d="M27 ${browY} H32" stroke="${brow}" stroke-width="${browW}" stroke-linecap="round"/>
     `;
-    mouth = `<path d="M20 26.2 Q24 28.8 28 26.2" stroke="${lip}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
+    mouth = `<path d="M20 26.2 Q24 28.5 28 26.2" stroke="${lip}" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
   }
 
   return { eyes, brows, mouth, extra };
@@ -312,10 +339,20 @@ export function renderAvatarSvg(opts = {}) {
   const pos = opts.pos || "";
   const age = opts.age || 25;
   const mood = opts.mood || "neutral";
+  // 战术板 / 列表小圆头像：紧凑五官 + 更亮肤色，避免糊成黑脸大眼
+  // 阈值 32：覆盖 26/28/30 常用尺寸，详情卡 64 等仍走完整五官
+  const compact = opts.compact === true || size <= 32;
 
-  // 肤色：主色 + 轻微偏移，减少「同一张脸」
+  // 肤色：主色 + 轻微偏移；小尺寸抬亮并钳制最低亮度
   let skin = pick(SKINS, h, 1);
   skin = shiftHex(skin, ((h >> 8) % 7) - 3);
+  if (compact) {
+    // 向暖米色靠拢，缩小时仍有「肉感」
+    skin = mixHex(skin, "#f0c9a8", 0.28);
+    if (luminance(skin) < 0.28) skin = mixHex(skin, "#e8b896", 0.45);
+  } else if (luminance(skin) < 0.12) {
+    skin = mixHex(skin, "#c68642", 0.35);
+  }
 
   let hair = pick(HAIRS, h, 2);
   if (age >= 34 && (h & 1) === 0) hair = mixHex(hair, "#6b7280", 0.55);
@@ -366,11 +403,12 @@ export function renderAvatarSvg(opts = {}) {
   const kitOuter = kitOuterStroke(kitP);
 
   const hairStyle = h % 7;
-  const faceW = 10.5 + (h % 4) * 0.55;
-  const faceH = 11.5 + (h % 3) * 0.4;
+  // 小尺寸略收脸宽，减少「大头黑脸」占满圆圈的感觉
+  const faceW = (compact ? 9.6 : 10.5) + (h % 4) * (compact ? 0.35 : 0.55);
+  const faceH = (compact ? 10.4 : 11.5) + (h % 3) * (compact ? 0.3 : 0.4);
   const browY = 17.5 + (h % 3) * 0.4;
-  const skinShade = shiftHex(skin, -22);
-  const skinHi = shiftHex(skin, 18);
+  const skinShade = shiftHex(skin, compact ? -12 : -22);
+  const skinHi = shiftHex(skin, compact ? 14 : 18);
 
   let accessory = "";
   if (role === "coach") {
@@ -442,9 +480,10 @@ export function renderAvatarSvg(opts = {}) {
     }
   }
 
-  const { eyes, brows, mouth, extra } = faceFeatures(mood, hair, browY, skin);
+  const { eyes, brows, mouth, extra } = faceFeatures(mood, hair, browY, skin, compact);
   const ini = initials(opts.name);
-  const clipId = `av${h.toString(36)}${mood[0] || "n"}${(h >> 12) & 15}`;
+  // 把 size 编进 id，避免同页大小头像共享 gradient/clip 定义互相覆盖
+  const clipId = `av${h.toString(36)}${mood[0] || "n"}${(h >> 12) & 15}s${size}`;
   const gradId = `bg${clipId}`;
   const skinGradId = `sk${clipId}`;
 

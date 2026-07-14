@@ -352,7 +352,7 @@
                 </div>
                 <div id="tac-bench" class="tac-bench" role="list"></div>
               </div>
-              <p class="hint" data-i18n="tac.pitchHint" style="margin-top:0.6rem">拖拽互换首发，或把替补拖上场；点名牌可查看资料。首发会尽量保留到开球。</p>
+              <p class="hint" data-i18n="tac.pitchHint" style="margin-top:0.6rem">拖拽换人；每人下方可选角色指令。点名牌可查看资料。首发会尽量保留到开球。</p>
             </div>
             <div class="card">
               <h2 data-i18n="tac.style">战术倾向</h2>
@@ -383,7 +383,7 @@
                 <span id="defensive-line-val" class="tac-slider-val">3 · 标准</span>
               </label>
               <div id="tac-summary" class="tac-summary" aria-live="polite"></div>
-              <p class="hint" data-i18n="tac.hint">阵型、风格与滑条会影响攻防、控球、犯规与体能；风格之间存在克制。</p>
+              <p class="hint" data-i18n="tac.hint">阵型、风格、滑条与角色指令都会影响攻防、控球、犯规与体能；风格之间存在克制。</p>
               <button id="btn-auto-xi" class="btn" data-i18n="tac.autoXi">自动排出最佳十一人</button>
             </div>
           </div>
@@ -866,11 +866,11 @@
     <div id="season-summary" class="season-summary hidden" role="dialog" aria-modal="true"></div>
   </div>
 
-  <script type="module" src="js/main.js?v=51"></script>
+  <script type="module" src="js/main.js?v=52"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("./sw.js?v=51").then(function (reg) {
+        navigator.serviceWorker.register("./sw.js?v=52").then(function (reg) {
           // 每次打开检查更新，避免卡在旧缓存
           try { reg.update(); } catch (e) {}
           if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });

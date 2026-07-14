@@ -8,7 +8,7 @@
 
 - 静态 SPA 足球经理；真源在 `js/match.js`（模拟），`matchview.js` 偏表现。
 - 存档 localStorage；改 JS/CSS 后靠 **Service Worker 版本号** + 用户 **Ctrl+F5**。
-- `sw.js`：**JS/CSS/HTML 网络优先**（v46 起），避免改队服/战术后仍吃旧缓存；当前 **`vcfm-v51`**。
+- `sw.js`：**JS/CSS/HTML 网络优先**（v46 起），避免改队服/战术后仍吃旧缓存；当前 **`vcfm-v52`**。
 - `index.html` 入口带 `?v=N` 与 SW `register("./sw.js?v=N")`，升版本时两边一起改。
 
 ## 近期已交付（勿重复造轮子）
@@ -16,53 +16,50 @@
 | 主题 | 要点 | 关键文件 |
 |------|------|----------|
 | 合同/租借 | 续约、解约、外租/租入/召回 + UI | `contracts.js`, `loans.js`, `main.js` |
-| 头像 v2 | 中性灰背景、球衣强制对比、双描边；**零队色进背景** | `avatar.js`, `css/style.css` |
-| 头像 v3 compact | `size<=32` 或 `opts.compact`：点状眼、抬亮肤色、收脸宽、简化伤/汗细节；clip id 含 size 防同页冲突 | `avatar.js` |
-| 头像 v3.1 | compact **强制浅肤**、深发抬亮、**短顶发**（禁蓬松/披肩）、无胡须、背景略亮 | `avatar.js` |
-| 头像 v4 token | `size<=44` 球员走 `renderTokenAvatarSvg`：大肉色脸+短发帽+简化球衣，**非完整小人缩放** | `avatar.js` |
-| 战术板头像尺寸 | 槽位/替补 `playerAvatarHtml(..., 40)`；`.player-dot .circle` 46px；SW **v51** | `main.js`, `css/style.css` |
-| 落日城 `sunset` | 固定橙 `#f97316` + 紫 `#5b21b6` + sash；`ensureKit` 覆盖旧存档；avatar 内也有 `AVATAR_KIT_THEME` | `clubs.js`, `models.js`, `avatar.js` |
-| 战术深度 | 8 阵型 + `FORM_MOD`；风格克制 `STYLE_MATCHUP`；宽度/防线；预设；控球/犯规/体能挂钩 | `data.js`, `match.js` |
-| 首发 | 用户开球 **`ensureMatchLineup`（不 forceAuto）** 尽量保留 XI；AI `forceAuto` | `models.js`, `match.js` |
-| 拖拽首发 | 战术板槽位互换、替补拖上场、点选二次点击；替补席 `#tac-bench` | `main.js`, `models.js`（`swapLineupSlots` / `setLineupSlot`）, `index.html` |
+| 头像 v4 token | `size<=44` 球员走 `renderTokenAvatarSvg`：大肉色脸+短发帽+简化球衣 | `avatar.js` |
+| 战术板头像尺寸 | 槽位/替补 `playerAvatarHtml(..., 40)`；`.player-dot .circle` 46px | `main.js`, `css/style.css` |
+| **角色指令 v1** | `tactics.roles[]` 与 lineup 等长；槽位下拉；进球/助攻/抢断权重 + `teamRoleMods` 整队微量攻防 | `data.js` (`PLAYER_ROLES`), `models.js`, `match.js`, `main.js` |
+| 落日城 `sunset` | 固定橙 `#f97316` + 紫 `#5b21b6` + sash | `clubs.js`, `models.js`, `avatar.js` |
+| 战术深度 | 8 阵型 + `FORMATION_MOD`；风格克制；宽度/防线；预设 | `data.js`, `match.js` |
+| 拖拽首发 | 槽位互换、替补拖上场、点选二次点击 | `main.js`, `models.js` |
 
 ## 战术对象（club.tactics）
 
 ```
-formation, style, pressing, tempo, width, defensiveLine, lineup[]
+formation, style, pressing, tempo, width, defensiveLine, lineup[], roles[]
 ```
 
-- 读档用 `ensureTactics(club)` 补字段。
-- 风格：`balanced|attack|defend|possession|counter`。
-- 阵型键含：`4-3-3`, `4-4-2`, `3-5-2`, `4-2-3-1`, `5-3-2`, `3-4-3`, `4-1-4-1`, `4-5-1`。
-- 预设：`TACTIC_PRESETS`（铁桶/高压/传控/防反/全攻/均衡）。
+- `lineup[i]` = 球员 id；`roles[i]` = 角色 id（`PLAYER_ROLES`）。
+- 角色挂在**槽位**：换人/互换球员不改职责；换阵型 `autoLineup` 会 `ensureLineupRoles({reset:true})`。
+- 读档用 `ensureTactics` → `ensureLineupRoles` 补齐。
+- 角色表：门将；中卫盯人/出球；边卫防守/套边；后腰/工兵/前腰/边路；抢点/支点/内切。
 
 ## 用户偏好与沟通
 
 - 界面与对话以**中文**为主；i18n 有 en 键时一并补。
 - 改完视觉/缓存类问题：优先怀疑 SW；给清缓存/Unregister 步骤。
 - 用户说「推到 GitHub」再 commit+push；说明用完整句 commit message。
-- 继续迭代时用户常说「继续」——可从 README/本文件 + 未做项里挑下一块。
 - 工作区主目录：`F:\VCFM`。
+- **FM 味路线图**：①角色指令（已做）→ ②队内讲话 → ③Inbox 信箱 → ④球探/对手报告 → ⑤中场换阵型+角色复盘。
 
 ## 已知缺口 / 可后续做
 
-- 战术板仍无「角色指令」（DM/AM/边后卫职责等）细粒度。
-- 中场可改阵型+滑条，但直播条无换阵型。
-- 触屏拖拽依赖 HTML5 DnD；复杂设备可再补 pointer 手势。
-- 其他俱乐部也可像 `sunset` 一样进 `CLUB_KIT_THEMES` / `KIT_THEME_BY_ID`（两处需同步，avatar 主题表第三处）。
+- ~~战术板角色指令~~ ✅ v52
+- 队内讲话（赛前/中场 3～5 选项 → 士气 + 媒体）
+- 统一 Inbox（董事会/报价/球探/球员诉求）
+- 中场可改阵型+滑条，但直播条无换阵型
+- 触屏 pointer 手势补强 HTML5 DnD
+- 更多俱乐部队服主题（三处同步：clubs / models / avatar）
 
 ## 最近推送
 
-- `981fb05` — 头像对比 + 落日城主题  
-- `4cb6d0f` — 战术系统 + 拖拽换人上首发  
-- `23a3183` — 头像 v3 compact + 战术板 30px + SW v49  
-- （本提交）头像 v4 token 令牌 + 战术板 46px + SW v51  
+- `e404cf8` — 头像 v4 token + 战术板 46px + SW v51  
+- （本提交）角色指令 v1 + SW v52  
 
 ## 自测提醒
 
-- 落日城头像应为**亮橙+紫**，灰背景对比明显。
-- 战术页圆点：**大肉色脸 + 短发帽 + 下半橙紫球衣**（token，不是缩成黑球的小人）；详情卡 64px 仍完整五官/发型。
-- 战术页：拖替补上场、两槽互换、点选流程；存档刷新后 XI 仍在。
-- 赛前简报 / 中场 / 场边战术与 `applyUserHalfTime` / `applyLiveTactics` 字段对齐（含 width、defensiveLine）。
-- 改完后若仍见旧图：Application → Unregister SW → Ctrl+F5。
+- 战术页：每人脚下有角色下拉；改「抢点/支点」等后摘要出现角色统计。
+- 存档刷新后 `roles` 仍在；换阵型会重配默认角色。
+- 比赛：前腰/套边更易助攻，抢点更易进球（统计感）。
+- 落日城 token 头像：肉色脸 + 橙紫衣。
+- 改完若仍旧：Unregister SW → Ctrl+F5。

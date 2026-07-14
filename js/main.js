@@ -12,6 +12,10 @@ import {
   TACTIC_PRESETS,
   tacticsSliderLabel,
   STYLE_MOD,
+  PLAYER_ROLES,
+  ROLES_BY_POS,
+  roleLabel,
+  roleShort,
 } from "./data.js";
 import { ensureMedia, mediaSeasonKickoff } from "./media.js";
 import { t, initPrefs, getLang } from "./i18n.js";
@@ -47,6 +51,10 @@ import {
   ensurePlayerNumber,
   swapLineupSlots,
   setLineupSlot,
+  ensureLineupRoles,
+  setSlotRole,
+  getSlotRole,
+  teamRoleMods,
 } from "./models.js";
 import {
   advanceDay,
@@ -160,7 +168,7 @@ import {
   playerAvatarHtml,
   staffAvatarHtml,
   avatarHtml,
-} from "./avatar.js?v=51";
+} from "./avatar.js?v=52";
 
 /** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
@@ -2238,6 +2246,27 @@ function renderTacticsSummary() {
   } else if (tac.style === "defend") {
     bits.push(en ? "Solid block; fewer chances created." : "防守稳固，创造机会偏少。");
   }
+  // 角色指令摘要
+  ensureLineupRoles(club);
+  const roles = tac.roles || [];
+  if (roles.length) {
+    const counts = {};
+    for (const rid of roles) {
+      const lab = roleShort(rid, en ? "en" : "zh");
+      counts[lab] = (counts[lab] || 0) + 1;
+    }
+    const top = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([k, n]) => (n > 1 ? `${k}×${n}` : k))
+      .join(" · ");
+    const rm = teamRoleMods(club);
+    bits.push(
+      en
+        ? `Roles: ${top} · team bias ATK×${rm.atk.toFixed(2)} DEF×${rm.def.toFixed(2)}`
+        : `角色：${top} · 整体 攻×${rm.atk.toFixed(2)} 防×${rm.def.toFixed(2)}`
+    );
+  }
   el.innerHTML = bits.map((b) => `<div>${b}</div>`).join("");
 }
 
@@ -2513,6 +2542,7 @@ function renderTactics() {
   if ((tac.lineup || []).length !== formation.slots.length) {
     autoLineup(club);
   }
+  ensureLineupRoles(club);
   const players = getLineupPlayers(club);
   const pitch = $("#pitch");
   if (!pitch) return;
@@ -2521,6 +2551,7 @@ function renderTactics() {
   const kit = ensureKit(club);
   const kitBg = kitBackground(kit);
   const kitNc = kit.numberColor || "#fff";
+  const en = getLang() === "en";
   pitch.innerHTML = formation.slots
     .map((slot, i) => {
       const p = players[i];
@@ -2531,8 +2562,17 @@ function renderTactics() {
         ? `background:${kitBg};color:${kitNc};border-color:${kit.primary || "#fff"}`
         : "background:rgba(148,163,184,0.25);border-color:rgba(255,255,255,0.35)";
       const av = p ? playerAvatarHtml(p, club, 40) : "";
+      const roleId = getSlotRole(club, i);
+      const roleOpts = (ROLES_BY_POS[slot.pos] || []).map((rid) => {
+        const r = PLAYER_ROLES[rid];
+        const lab = en ? r?.labelEn : r?.label;
+        return `<option value="${rid}"${rid === roleId ? " selected" : ""}>${escapeHtml(lab || rid)}</option>`;
+      });
+      const roleSel = `<select class="tac-role-sel" data-slot-role="${i}" title="${escapeHtml(
+        en ? "Player role" : "角色指令"
+      )}" aria-label="${escapeHtml(en ? "Role" : "角色")}">${roleOpts.join("")}</select>`;
       const full = p
-        ? `${shirtNo != null ? `#${shirtNo} ` : ""}${p.name} · ${POS_LABEL[slot.pos] || slot.pos}`
+        ? `${shirtNo != null ? `#${shirtNo} ` : ""}${p.name} · ${roleLabel(roleId, en ? "en" : "zh")}`
         : `${POS_LABEL[slot.pos] || slot.pos}`;
       const badge =
         shirtNo != null
@@ -2554,6 +2594,7 @@ function renderTactics() {
         ${p ? `data-player-id="${escapeHtml(p.id)}"` : ""}>
         <div class="circle kit-dot" style="${style}">${av || fallback}${badge}</div>
         <div class="name">${nameHtml}</div>
+        ${roleSel}
       </div>`;
     })
     .join("");
@@ -2604,8 +2645,37 @@ function renderTactics() {
   }
 
   bindTacticsDragDrop();
+  bindTacticsRoleSelects();
   applyTacPickHighlight();
   renderTacticsSummary();
+}
+
+/** 槽位角色下拉（每次 render 后重绑） */
+function bindTacticsRoleSelects() {
+  const pitch = $("#pitch");
+  if (!pitch) return;
+  pitch.querySelectorAll("[data-slot-role]").forEach((sel) => {
+    sel.addEventListener("mousedown", (e) => e.stopPropagation());
+    sel.addEventListener("click", (e) => e.stopPropagation());
+    sel.addEventListener("change", (e) => {
+      e.stopPropagation();
+      if (!world) return;
+      const club = getUserClub(world);
+      const slot = +sel.getAttribute("data-slot-role");
+      const res = setSlotRole(club, slot, sel.value);
+      if (!res.ok) {
+        toast(res.msg || t("tac.roleFail"));
+        return;
+      }
+      saveGame(world);
+      renderTacticsSummary();
+      toast(
+        t("tac.roleSet", {
+          role: roleLabel(sel.value, getLang() === "en" ? "en" : "zh"),
+        })
+      );
+    });
+  });
 }
 
 function closeModal() {

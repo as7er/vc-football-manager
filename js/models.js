@@ -7,6 +7,10 @@ import {
   DIVISIONS,
   START_DIVISION,
   generatePlayerName,
+  PLAYER_ROLES,
+  ROLES_BY_POS,
+  DEFAULT_ROLE_BY_POS,
+  defaultRoleForSlot,
 } from "./data.js";
 
 let _id = 1;
@@ -607,7 +611,7 @@ function playerSelectable(p) {
   return true;
 }
 
-/** 默认战术（含宽度 / 防线） */
+/** 默认战术（含宽度 / 防线 / 槽位角色） */
 export function defaultTactics() {
   return {
     formation: "4-3-3",
@@ -617,7 +621,44 @@ export function defaultTactics() {
     width: 3,
     defensiveLine: 3,
     lineup: [],
+    /** 与 lineup 等长：每槽角色 id（见 data.PLAYER_ROLES） */
+    roles: [],
   };
+}
+
+/**
+ * 规范化 / 补齐槽位角色数组（不回调 ensureTactics，避免循环）
+ * @param {object} club
+ * @param {{ reset?: boolean }} [opts] reset=true 时按阵型重写默认角色
+ */
+export function ensureLineupRoles(club, { reset = false } = {}) {
+  if (!club?.tactics) return [];
+  const t = club.tactics;
+  const formation = FORMATIONS[t.formation] || FORMATIONS["4-3-3"];
+  const slots = formation.slots || [];
+  const need = slots.length;
+  if (!Array.isArray(t.roles)) t.roles = [];
+  if (reset || t.roles.length !== need) {
+    const next = [];
+    for (let i = 0; i < need; i++) {
+      const prev = !reset && t.roles[i];
+      if (prev && PLAYER_ROLES[prev] && PLAYER_ROLES[prev].pos === slots[i].pos) {
+        next.push(prev);
+      } else {
+        next.push(defaultRoleForSlot(slots[i], i, slots));
+      }
+    }
+    t.roles = next;
+  } else {
+    for (let i = 0; i < need; i++) {
+      const rid = t.roles[i];
+      const slot = slots[i];
+      if (!PLAYER_ROLES[rid] || PLAYER_ROLES[rid].pos !== slot.pos) {
+        t.roles[i] = defaultRoleForSlot(slot, i, slots);
+      }
+    }
+  }
+  return t.roles;
 }
 
 /** 读档补齐战术字段 */
@@ -635,12 +676,102 @@ export function ensureTactics(club) {
     if (t.width == null) t.width = d.width;
     if (t.defensiveLine == null) t.defensiveLine = d.defensiveLine;
     if (!Array.isArray(t.lineup)) t.lineup = [];
+    if (!Array.isArray(t.roles)) t.roles = [];
     t.pressing = Math.max(1, Math.min(5, +t.pressing || 3));
     t.tempo = Math.max(1, Math.min(5, +t.tempo || 3));
     t.width = Math.max(1, Math.min(5, +t.width || 3));
     t.defensiveLine = Math.max(1, Math.min(5, +t.defensiveLine || 3));
   }
+  ensureLineupRoles(club);
   return club.tactics;
+}
+
+/** 设置某槽角色 */
+export function setSlotRole(club, slotIndex, roleId) {
+  ensureTactics(club);
+  const formation = FORMATIONS[club.tactics.formation] || FORMATIONS["4-3-3"];
+  const slots = formation.slots || [];
+  const idx = +slotIndex;
+  if (!Number.isFinite(idx) || idx < 0 || idx >= slots.length) {
+    return { ok: false, msg: "无效槽位" };
+  }
+  ensureLineupRoles(club);
+  const role = PLAYER_ROLES[roleId];
+  if (!role || role.pos !== slots[idx].pos) {
+    return { ok: false, msg: "角色与位置不匹配" };
+  }
+  club.tactics.roles[idx] = roleId;
+  return { ok: true, roleId };
+}
+
+/** 取槽位角色 id */
+export function getSlotRole(club, slotIndex) {
+  ensureTactics(club);
+  ensureLineupRoles(club);
+  const formation = FORMATIONS[club.tactics.formation] || FORMATIONS["4-3-3"];
+  return (
+    club.tactics.roles?.[slotIndex] ||
+    defaultRoleForSlot(formation.slots[slotIndex], slotIndex, formation.slots)
+  );
+}
+
+/**
+ * 球员在首发中的角色（按 lineup 下标）
+ * @returns {string|null}
+ */
+export function roleIdForPlayer(club, playerId) {
+  if (!club?.tactics || !playerId) return null;
+  ensureTactics(club);
+  ensureLineupRoles(club);
+  const i = (club.tactics.lineup || []).indexOf(playerId);
+  if (i < 0) return null;
+  return club.tactics.roles[i] || null;
+}
+
+/** 角色定义对象 */
+export function roleDefForPlayer(club, playerId) {
+  const id = roleIdForPlayer(club, playerId);
+  return id ? PLAYER_ROLES[id] || null : null;
+}
+
+/**
+ * 汇总首发角色对球队侧的微量修正
+ * @returns {{ atk: number, def: number, poss: number, foul: number, chance: number, fit: number }}
+ */
+export function teamRoleMods(club) {
+  ensureTactics(club);
+  ensureLineupRoles(club);
+  const mods = { atk: 1, def: 1, poss: 1, foul: 1, chance: 1, fit: 1 };
+  const roles = club.tactics.roles || [];
+  if (!roles.length) return mods;
+  let atk = 0;
+  let def = 0;
+  let poss = 0;
+  let foul = 0;
+  let chance = 0;
+  let fit = 0;
+  let n = 0;
+  for (const rid of roles) {
+    const r = PLAYER_ROLES[rid];
+    if (!r) continue;
+    n++;
+    atk += r.atk || 0;
+    def += r.def || 0;
+    poss += r.poss || 0;
+    foul += r.foul || 0;
+    chance += r.chance || 0;
+    fit += r.fit || 0;
+  }
+  if (!n) return mods;
+  // 平均后再收敛：整队大约 ±6% 内
+  const scale = 0.55;
+  mods.atk = 1 + (atk / n) * scale;
+  mods.def = 1 + (def / n) * scale;
+  mods.poss = 1 + (poss / n) * scale;
+  mods.foul = 1 + (foul / n) * scale;
+  mods.chance = 1 + (chance / n) * scale;
+  mods.fit = 1 + (fit / n) * scale;
+  return mods;
 }
 
 function xiSortScore(p) {
@@ -668,6 +799,7 @@ export function autoLineup(club) {
     }
   }
   club.tactics.lineup = lineup;
+  ensureLineupRoles(club, { reset: true });
   return lineup;
 }
 
@@ -710,6 +842,7 @@ export function ensureMatchLineup(club, { forceAuto = false } = {}) {
     }
   }
   club.tactics.lineup = next;
+  ensureLineupRoles(club);
   return next;
 }
 
@@ -747,6 +880,8 @@ export function swapLineupSlots(club, slotA, slotB) {
   lineup[a] = lineup[b];
   lineup[b] = tmp;
   club.tactics.lineup = lineup;
+  // 角色挂在槽位上：换人不换职责（更接近「这个位置怎么踢」）
+  ensureLineupRoles(club);
   return { ok: true };
 }
 
@@ -786,6 +921,7 @@ export function setLineupSlot(club, slotIndex, playerId) {
     lineup[idx] = playerId;
   }
   club.tactics.lineup = lineup.filter((id, i) => i < need);
+  ensureLineupRoles(club);
   const slotPos = formation.slots[idx]?.pos;
   const outOfPos = slotPos && player.pos && player.pos !== slotPos;
   return { ok: true, outOfPos, slotPos, playerPos: player.pos };

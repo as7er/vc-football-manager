@@ -8,14 +8,18 @@ import {
   autoLineup,
   ensureMatchLineup,
   ensureTactics,
+  ensureLineupRoles,
   formatMoney,
   ensurePlayerHistory,
+  roleDefForPlayer,
+  teamRoleMods,
 } from "./models.js";
 import {
   STYLE_MOD,
   FORMATION_MOD,
   styleMatchupMod,
   FORMATIONS,
+  PLAYER_ROLES,
 } from "./data.js";
 import {
   coachMatchMod,
@@ -264,6 +268,8 @@ function recomputeSides(state) {
   const { home, away, weather, derby, bigMatch, isCup } = state;
   ensureTactics(home);
   ensureTactics(away);
+  ensureLineupRoles(home);
+  ensureLineupRoles(away);
   const hs = teamStrength(home);
   const as = teamStrength(away);
   let homeAtk = applyStyle(hs, home.tactics, "atk", away.tactics);
@@ -271,22 +277,31 @@ function recomputeSides(state) {
   let awayAtk = applyStyle(as, away.tactics, "atk", home.tactics);
   let awayDef = applyStyle(as, away.tactics, "def", home.tactics);
 
+  // 槽位角色：整队微量攻防修正
+  const hRole = teamRoleMods(home);
+  const aRole = teamRoleMods(away);
+  homeAtk *= hRole.atk;
+  homeDef *= hRole.def;
+  awayAtk *= aRole.atk;
+  awayDef *= aRole.def;
+  state._roleMods = { home: hRole, away: aRole };
+
   // 缓存控球/犯规/威胁权重供 tryAttack 使用
   state._possW = {
-    home: possessionWeight(home.tactics),
-    away: possessionWeight(away.tactics),
+    home: possessionWeight(home.tactics) * hRole.poss,
+    away: possessionWeight(away.tactics) * aRole.poss,
   };
   state._foulW = {
-    home: foulRiskOf(home.tactics),
-    away: foulRiskOf(away.tactics),
+    home: foulRiskOf(home.tactics) * hRole.foul,
+    away: foulRiskOf(away.tactics) * aRole.foul,
   };
   state._chanceW = {
-    home: chanceMultOf(home.tactics),
-    away: chanceMultOf(away.tactics),
+    home: chanceMultOf(home.tactics) * hRole.chance,
+    away: chanceMultOf(away.tactics) * aRole.chance,
   };
   state._fitW = {
-    home: fitnessMultOf(home.tactics),
-    away: fitnessMultOf(away.tactics),
+    home: fitnessMultOf(home.tactics) * hRole.fit,
+    away: fitnessMultOf(away.tactics) * aRole.fit,
   };
 
   const hCoach = coachMatchMod(home);
@@ -452,34 +467,53 @@ function weightedPick(pool, weightFn) {
   return pool[pool.length - 1];
 }
 
-function pickScorer(xi) {
+/** 从 state + club 取球员角色加成（进球/助攻/抢断） */
+function roleWeights(state, club, player) {
+  if (!player) return { score: 0, assist: 0, tackle: 0 };
+  const r = roleDefForPlayer(club, player.id);
+  if (r) return { score: r.score || 0, assist: r.assist || 0, tackle: r.tackle || 0 };
+  // 无角色时按位置兜底
+  if (player.pos === "ATT") return { score: 2.5, assist: 1, tackle: 0.3 };
+  if (player.pos === "MID") return { score: 1.2, assist: 2, tackle: 1.2 };
+  if (player.pos === "DEF") return { score: 0.5, assist: 0.6, tackle: 1.8 };
+  return { score: 0, assist: 0.2, tackle: 0.3 };
+}
+
+function pickScorer(xi, state, club) {
   const attackers = xi.filter((p) => p.pos === "ATT" || p.pos === "MID");
   const pool = attackers.length ? attackers : xi;
-  return weightedPick(
-    pool,
-    (p) =>
+  return weightedPick(pool, (p) => {
+    const rw = roleWeights(state, club, p);
+    return (
       (p.attrs?.finishing || p.attrs?.shooting || 10) +
-      (p.pos === "ATT" ? 6 : p.pos === "MID" ? 2 : 0) +
+      (p.pos === "ATT" ? 4 : p.pos === "MID" ? 1.5 : 0) +
+      rw.score * 1.8 +
       rng() * 3
-  );
+    );
+  });
 }
 
-function pickAssister(xi, scorer) {
+function pickAssister(xi, scorer, state, club) {
   const pool = xi.filter((p) => p.id !== scorer.id && p.pos !== "GK");
   if (!pool.length || chance(0.28)) return null;
-  return weightedPick(
-    pool,
-    (p) =>
+  return weightedPick(pool, (p) => {
+    const rw = roleWeights(state, club, p);
+    return (
       (p.attrs?.passing || 10) +
       (p.attrs?.vision || 8) +
-      (p.pos === "MID" ? 5 : p.pos === "ATT" ? 2 : 1) +
+      (p.pos === "MID" ? 3 : p.pos === "ATT" ? 1.5 : 1) +
+      rw.assist * 1.6 +
       rng() * 2
-  );
+    );
+  });
 }
 
-function pickDefender(xi) {
+function pickDefender(xi, state, club) {
   const defs = xi.filter((p) => p.pos === "DEF" || p.pos === "MID");
-  return weightedPick(defs.length ? defs : xi, (p) => (p.attrs?.tackling || p.attrs?.defending || 10) + rng() * 2);
+  return weightedPick(defs.length ? defs : xi, (p) => {
+    const rw = roleWeights(state, club, p);
+    return (p.attrs?.tackling || p.attrs?.defending || 10) + rw.tackle * 1.5 + rng() * 2;
+  });
 }
 
 function pickGk(xi) {
@@ -488,9 +522,9 @@ function pickGk(xi) {
 
 function addGoal(state, minute, club, xi, { penalty = false } = {}) {
   const sk = sideKey(state, club);
-  const scorer = pickScorer(xi);
+  const scorer = pickScorer(xi, state, club);
   if (!scorer) return;
-  const assister = penalty ? null : pickAssister(xi, scorer);
+  const assister = penalty ? null : pickAssister(xi, scorer, state, club);
   if (sk === "home") state.hg++;
   else state.ag++;
   // 个人赛季数据只计联赛（数据榜 / 阵容赛季列）
@@ -634,7 +668,7 @@ function tryCardOrFoul(state, minute) {
   const sk = homeSide ? "home" : "away";
   const foulW = state._foulW?.[sk] || 1;
   const xi = activeXi(state, club);
-  const p = pickDefender(xi) || xi[0];
+  const p = pickDefender(xi, state, club) || xi[0];
   if (!p) return;
 
   state.stats[sk].fouls++;
@@ -749,8 +783,11 @@ export function applySubstitution(state, club, outId, inId, minute, silent = fal
 
   lineup[idx] = inId;
   club.tactics.lineup = lineup;
+  // 角色挂在槽位：换人继承该槽职责
+  ensureLineupRoles(club);
   state.subsUsed[sk]++;
   state.injuredOut.delete(outId); // 已换下
+  recomputeSides(state);
 
   if (!silent) {
     pushEv(

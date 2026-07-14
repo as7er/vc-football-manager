@@ -849,6 +849,30 @@ html[data-theme="light"] .player-dot .pitch-num {
   border-color: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+/* 槽位角色指令下拉（战术板） */
+.tac-role-sel {
+  display: block;
+  width: min(92px, 22vw);
+  max-width: 100%;
+  margin: 2px auto 0;
+  padding: 1px 2px;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.88);
+  color: #e8eefc;
+  cursor: pointer;
+  pointer-events: auto;
+  appearance: auto;
+  z-index: 4;
+}
+html[data-theme="light"] .tac-role-sel {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a2438;
+  border-color: rgba(26, 36, 56, 0.2);
+}
 .player-dot .name {
   font-size: 0.68rem;
   font-weight: 600;

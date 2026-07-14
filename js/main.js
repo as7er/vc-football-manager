@@ -1,4 +1,4 @@
-﻿/** VCFM 路 UI 涓婚€昏緫 */
+/** VCFM · UI 主逻辑 */
 
 import {
   CLUB_TEMPLATES,
@@ -32,7 +32,7 @@ function nationLabel(p) {
     const n = NATIONALITIES.find((x) => x.code === p.nationality);
     if (n) return `${n.flag} ${n.name}`;
   }
-  return "鈥?;
+  return "—";
 }
 import {
   createWorld,
@@ -193,7 +193,7 @@ import {
   avatarHtml,
 } from "./avatar.js?v=58";
 
-/** 瑙ｉ泧鍚庡洖鑿滃崟锛氫紭鍏堟彁绀烘崲绌烘Ы寮€鏂版。锛岄伩鍏嶈瑕嗙洊 */
+/** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
   if (!result || !result.sacked) return false;
   autosave("sacked");
@@ -204,16 +204,16 @@ function handleSacked(result) {
   if (pick) {
     setActiveSlot(pick);
   }
-  const reason = result.msg || result.sackedResult?.msg || world?.sackedReason || "浣犲凡琚懀浜嬩細瑙ｉ泧銆?;
+  const reason = result.msg || result.sackedResult?.msg || world?.sackedReason || "你已被董事会解雇。";
   const tip = pick
-    ? `\n\n宸茶嚜鍔ㄩ€変腑绌烘Ы ${pick} 鏂逛究寮€鏂版。銆俓n瑙ｉ泧瀛樻。浠嶅湪妲?${slot}锛堝彲璇诲彇鍥為【锛夈€俙
-    : `\n\n涓変釜妲介兘鏈夊瓨妗ｃ€傚紑鏂版。浼氳鐩栥€屽綋鍓嶆Ы銆嶁€斺€斿缓璁厛閫変竴涓笉蹇冪柤鐨勬Ы锛屾垨鍏堝鍑哄浠姐€俓n瑙ｉ泧璁板綍鍦ㄦЫ ${slot}銆俙;
+    ? `\n\n已自动选中空槽 ${pick} 方便开新档。\n解雇存档仍在槽 ${slot}（可读取回顾）。`
+    : `\n\n三个槽都有存档。开新档会覆盖「当前槽」——建议先选一个不心疼的槽，或先导出备份。\n解雇记录在槽 ${slot}。`;
   alert(reason + tip);
   showScreen("start");
   refreshSlotUI();
   $("#start-hint").textContent = pick
-    ? `宸茶瑙ｉ泧銆傛柊妗ｅ皢鍐欏叆妲?${pick}锛涙Ы ${slot} 淇濈暀瑙ｉ泧瀛樻。銆俙
-    : `宸茶瑙ｉ泧锛堟Ы ${slot}锛夈€傝閫夋嫨瑕佽鐩栫殑妲藉悗寮€鏂拌禌瀛ｏ紝鎴栧厛瀵煎嚭銆俙;
+    ? `已被解雇。新档将写入槽 ${pick}；槽 ${slot} 保留解雇存档。`
+    : `已被解雇（槽 ${slot}）。请选择要覆盖的槽后开新赛季，或先导出。`;
   world = null;
   return true;
 }
@@ -223,26 +223,26 @@ let pendingMatch = null;
 let liveRunning = false;
 /** @type {import('./match.js').createMatchSession extends Function ? any : any} */
 let matchState = null;
-let pendingSubs = []; // 涓満寰呯‘璁ゆ崲浜?{outId, inId, outName, inName}
-/** 璧涘墠闃熷唴璁茶瘽 id锛堥粯璁ら紦鍔憋級 */
+let pendingSubs = []; // 中场待确认换人 {outId, inId, outName, inName}
+/** 赛前队内讲话 id（默认鼓励） */
 let selectedPreTalk = "encourage";
 /** @type {import('./matchview.js').MatchView | null} */
 let matchView = null;
 
-/** 姣旇禌鎾斁鎺у埗锛氭殏鍋?/ 閫愪簨浠?+ 杩涚悆鍥炵湅缂撳瓨 */
+/** 比赛播放控制：暂停 / 逐事件 + 进球回看缓存 */
 const matchPlayback = {
   paused: false,
   stepMode: false,
   waitingStep: false,
   /** @type {null | (() => void)} */
   stepResolve: null,
-  /** 璧涗腑鍙搷浣滄殏鍋?涓嬩竴姝?*/
+  /** 赛中可操作暂停/下一步 */
   controlsEnabled: false,
   /** @type {{ ev: object, snap: object, fixture: object }[]} */
   goals: [],
-  /** 璧涘悗鍥炵湅杩涜涓紝闃叉杩炵偣 */
+  /** 赛后回看进行中，防止连点 */
   replaying: false,
-  /** 浠庤禌绋嬫墦寮€鏃ф垬鎶ワ紙鍙锛屼笉缁撶畻锛?*/
+  /** 从赛程打开旧战报（只读，不结算） */
   reviewMode: false,
 };
 
@@ -279,7 +279,7 @@ function updateMatchPlaybackUI() {
       : t("match.pause");
   }
   if (stepBtn) {
-    // 鏆傚仠涓?鎴?閫愪簨浠剁瓑寰呮椂锛屽彲鐐广€屼笅涓€姝ャ€?
+    // 暂停中 或 逐事件等待时，可点「下一步」
     stepBtn.disabled = !en || (!matchPlayback.paused && !matchPlayback.waitingStep && !matchPlayback.stepMode);
     stepBtn.classList.toggle("active", matchPlayback.waitingStep);
   }
@@ -290,7 +290,7 @@ function updateMatchPlaybackUI() {
   updateMatchSfxUI();
 }
 
-/** 鍙鏆傚仠鎵撴柇鐨勭瓑寰咃紱閫愪簨浠舵ā寮忎笅缁撴潫鍚庡啀绛夌敤鎴风偣銆屼笅涓€姝ャ€?*/
+/** 可被暂停打断的等待；逐事件模式下结束后再等用户点「下一步」 */
 async function sleepPlayback(ms) {
   const total = Math.max(0, Number(ms) || 0);
   const end = performance.now() + total;
@@ -310,7 +310,7 @@ async function sleepPlayback(ms) {
 
 function waitForMatchStep() {
   if (matchPlayback.stepResolve) {
-    // 宸插湪绛夛紝澶嶇敤
+    // 已在等，复用
     return new Promise((r) => {
       const prev = matchPlayback.stepResolve;
       matchPlayback.stepResolve = () => {
@@ -325,7 +325,7 @@ function waitForMatchStep() {
     matchPlayback.stepResolve = () => {
       matchPlayback.waitingStep = false;
       matchPlayback.stepResolve = null;
-      // 鐐逛笅涓€姝ユ椂椤轰究瑙ｉ櫎鏆傚仠锛岄伩鍏嶅崱姝?
+      // 点下一步时顺便解除暂停，避免卡死
       matchPlayback.paused = false;
       if (matchView?.setFrozen) matchView.setFrozen(false);
       updateMatchPlaybackUI();
@@ -339,7 +339,7 @@ function requestMatchStep() {
     matchPlayback.stepResolve();
     return;
   }
-  // 鏆傚仠涓絾杩樻病杩涘叆 wait锛氳В闄ゆ殏鍋滆 sleep 缁х画锛屽苟杩涘叆涓€姝?
+  // 暂停中但还没进入 wait：解除暂停让 sleep 继续，并进入一步
   if (matchPlayback.paused) {
     matchPlayback.paused = false;
     if (matchView?.setFrozen) matchView.setFrozen(false);
@@ -350,10 +350,10 @@ function requestMatchStep() {
 function toggleMatchPause() {
   if (!matchPlayback.controlsEnabled) return;
   matchPlayback.paused = !matchPlayback.paused;
-  // 鍐荤粨鐞冨満 AI锛堜繚鐣欑珯浣嶏紝鍖哄埆浜?HT/FT 閽夊洖闃靛瀷锛?
+  // 冻结球场 AI（保留站位，区别于 HT/FT 钉回阵型）
   if (matchView?.setFrozen) matchView.setFrozen(matchPlayback.paused);
   if (!matchPlayback.paused && matchPlayback.stepResolve && !matchPlayback.stepMode) {
-    // 缁х画鎾斁锛氳嫢鍗″湪閫愭绛夊緟涓旈潪閫愭妯″紡锛屾斁琛?
+    // 继续播放：若卡在逐步等待且非逐步模式，放行
     matchPlayback.stepResolve();
   }
   updateMatchPlaybackUI();
@@ -361,10 +361,10 @@ function toggleMatchPause() {
     matchPlayback.paused
       ? getLang() === "en"
         ? "Paused"
-        : "宸叉殏鍋?
+        : "已暂停"
       : getLang() === "en"
         ? "Resumed"
-        : "缁х画姣旇禌"
+        : "继续比赛"
   );
 }
 
@@ -376,7 +376,7 @@ function toggleMatchStepMode() {
       ? t("match.stepModeOn")
       : t("match.stepModeOff")
   );
-  // 鍏虫帀閫愪簨浠舵椂鑻ユ鍦ㄧ瓑涓嬩竴姝ワ紝鏀捐
+  // 关掉逐事件时若正在等下一步，放行
   if (!matchPlayback.stepMode && matchPlayback.stepResolve) {
     matchPlayback.stepResolve();
   }
@@ -398,12 +398,12 @@ function toggleMatchSfx() {
     next
       ? getLang() === "en"
         ? "SFX off"
-        : "闊虫晥宸插叧"
+        : "音效已关"
       : getLang() === "en"
         ? "SFX on"
-        : "闊虫晥宸插紑"
+        : "音效已开"
   );
-  // 寮€闊虫椂杞诲搷涓€澹扮‘璁?
+  // 开音时轻响一声确认
   if (!next && matchView?.playSfx) matchView.playSfx("whistle");
 }
 
@@ -423,15 +423,15 @@ function updateMatchSfxUI() {
   btn.textContent = muted
     ? getLang() === "en"
       ? "SFX off"
-      : "闈欓煶"
-    : t("match.sfx") || (getLang() === "en" ? "SFX" : "闊虫晥");
+      : "静音"
+    : t("match.sfx") || (getLang() === "en" ? "SFX" : "音效");
 }
 
 /**
  * @param {object} ev
  * @param {object} [snap]
  * @param {object} [fixture]
- * @param {object|null} [scene] 杩涚悆鐬棿鍦洪潰锛堝洖鐪嬭繕鍘熺敤锛?
+ * @param {object|null} [scene] 进球瞬间场面（回看还原用）
  */
 function rememberGoalReplay(ev, snap, fixture, scene = null) {
   if (!ev || ev.type !== "goal") return;
@@ -443,22 +443,22 @@ function rememberGoalReplay(ev, snap, fixture, scene = null) {
   });
 }
 
-/** 璧涘悗 / 鏃ュ織鐐瑰嚮锛氶噸鐪嬬 n 涓繘鐞?*/
+/** 赛后 / 日志点击：重看第 n 个进球 */
 async function replayStoredGoal(index) {
   if (matchPlayback.replaying) {
-    toast(getLang() === "en" ? "Replay in progress鈥? : "鍥炴斁杩涜涓€?);
+    toast(getLang() === "en" ? "Replay in progress…" : "回放进行中…");
     return;
   }
   const item = matchPlayback.goals[index];
   if (!item || !matchView?.playGoalHighlight) {
-    toast(getLang() === "en" ? "No replay for this goal" : "璇ヨ繘鐞冩殏鏃犲彲鍥炵湅");
+    toast(getLang() === "en" ? "No replay for this goal" : "该进球暂无可回看");
     return;
   }
   matchPlayback.replaying = true;
   try {
     ensureMatchPitch();
     const spd = Math.max(0.25, Number(matchSpeed) || 1);
-    // 鍥炵湅鏃剁暐鎱竴鐐规洿濂界湅锛涙湁鍦洪潰蹇収鍒欎粠鍚屼竴甯ф帴缁?
+    // 回看时略慢一点更好看；有场面快照则从同一帧接续
     await matchView.playGoalHighlight(item.ev, item.snap, item.fixture, {
       speed: Math.min(spd, 1),
       lang: getLang(),
@@ -468,13 +468,13 @@ async function replayStoredGoal(index) {
     });
   } catch (err) {
     console.error(err);
-    toast(getLang() === "en" ? "Replay failed" : "鍥炴斁澶辫触");
+    toast(getLang() === "en" ? "Replay failed" : "回放失败");
   } finally {
     matchPlayback.replaying = false;
   }
 }
 
-/** 鐩存挱鍊嶉€?0.5 / 1 / 2 / 4 */
+/** 直播倍速 0.5 / 1 / 2 / 4 */
 function readPref(key, oldKey, fallback) {
   try {
     return localStorage.getItem(key) || (oldKey ? localStorage.getItem(oldKey) : null) || fallback;
@@ -485,15 +485,15 @@ function readPref(key, oldKey, fallback) {
 const MATCH_SPEEDS = [0.5, 1, 1.5, 2, 4];
 let matchSpeed = (() => {
   const raw = Number(readPref("vcfm-match-speed", "vc-fm-match-speed", "1"));
-  // 鏃у瓨妗ｈ嫢鏄?2/4锛屼粛灏婇噸锛涢潪娉曞€煎洖钀藉埌銆屾甯搞€嵜?
+  // 旧存档若是 2/4，仍尊重；非法值回落到「正常」×1
   if (!MATCH_SPEEDS.includes(raw)) return 1;
   return raw;
 })();
-/** 瀵煎嚭鎻愰啋锛氫笂娆″鍑烘椂闂存埑 */
+/** 导出提醒：上次导出时间戳 */
 const EXPORT_TIP_KEY = "vcfm-last-export";
 const OLD_EXPORT_TIP_KEY = "vc-fm-last-export";
 
-/** 鑷姩瀛樻。锛堥潤榛橈紝澶辫触浠?console锛?*/
+/** 自动存档（静默，失败仅 console） */
 function autosave(msg) {
   if (!world) return false;
   const ok = saveGame(world);
@@ -502,7 +502,7 @@ function autosave(msg) {
 }
 
 
-/** 鐞冭。鍙风爜寰界珷鐨?inline style */
+/** 球衣号码徽章的 inline style */
 function kitBadgeStyle(club) {
   const kit = ensureKit(club);
   const bg = kitBackground(kit);
@@ -514,7 +514,7 @@ function renderKitShirt(club, number, size = 48) {
   const kit = ensureKit(club);
   const bg = kitBackground(kit);
   const color = kit.numberColor || "#fff";
-  const n = number != null ? number : "鈥?;
+  const n = number != null ? number : "—";
   return `<span class="kit-shirt" style="width:${size}px;height:${Math.round(size * 1.15)}px;background:${bg};color:${color};border-color:${kit.primary || "#334155"}"><span class="kit-shirt-num">${n}</span></span>`;
 }
 
@@ -549,7 +549,7 @@ function refreshSlotUI() {
       const title = formatSlotLabel(s);
       const sub = s.empty
         ? t("start.slotEmptyClick")
-        : t("start.slotManager", { name: escapeHtml(s.manager || "鈥?) });
+        : t("start.slotManager", { name: escapeHtml(s.manager || "—") });
       const delBtn = s.empty
         ? ""
         : `<button type="button" class="slot-delete btn small danger" data-slot-delete="${s.slot}" title="${escapeHtml(t("start.slotDelete"))}" aria-label="${escapeHtml(t("start.slotDelete"))}">${escapeHtml(t("start.slotDeleteShort"))}</button>`;
@@ -581,14 +581,14 @@ function refreshSlotUI() {
       if (!info || info.empty) return;
       const detail =
         getLang() === "en"
-          ? `Slot ${n}: ${info.clubName || "鈥?} 路 S${info.season ?? "?"} D${info.day ?? "?"}`
-          : `妲?${n}锛?{info.clubName || "鈥?} 路 S${info.season ?? "?"} D${info.day ?? "?"}`;
+          ? `Slot ${n}: ${info.clubName || "—"} · S${info.season ?? "?"} D${info.day ?? "?"}`
+          : `槽 ${n}：${info.clubName || "—"} · S${info.season ?? "?"} D${info.day ?? "?"}`;
       if (!confirm(`${t("start.slotDeleteConfirm", { n })}\n${detail}`)) return;
       if (!clearSave(n)) {
         toast(t("start.slotDeleteFail"));
         return;
       }
-      // 鍒犵殑鏄綋鍓嶆Ы锛氫繚鎸侀€変腑绌烘Ы锛涘惁鍒欎笉鏀?active
+      // 删的是当前槽：保持选中空槽；否则不改 active
       if (getActiveSlot() === n) setActiveSlot(n);
       refreshSlotUI();
       $("#start-hint").textContent = t("start.slotDeleted", { n });
@@ -642,7 +642,7 @@ function initStart() {
       for (const c of world.clubs) ensureStaff(c);
       refreshStaffMarket(world);
       const u = world.clubs.find((c) => c.id === clubId);
-      mediaSeasonKickoff(world, u, DIVISIONS[u.division || 3]?.name || "涔欑骇鑱旇禌");
+      mediaSeasonKickoff(world, u, DIVISIONS[u.division || 3]?.name || "乙级联赛");
       ensureBoardObjective(world);
       ensureTransferWindow(world);
       processTransferWindowDay(world);
@@ -652,8 +652,8 @@ function initStart() {
     } catch (err) {
       console.error(err);
       const msg = err?.message || String(err);
-      $("#start-hint").textContent = getLang() === "en" ? `Failed to start: ${msg}` : `寮€灞€澶辫触锛?{msg}`;
-      toast(getLang() === "en" ? `Start failed: ${msg}` : `寮€灞€澶辫触锛?{msg}`);
+      $("#start-hint").textContent = getLang() === "en" ? `Failed to start: ${msg}` : `开局失败：${msg}`;
+      toast(getLang() === "en" ? `Start failed: ${msg}` : `开局失败：${msg}`);
     }
   };
 
@@ -712,7 +712,7 @@ function initStart() {
   };
 }
 
-/** 鏃у瓨妗?/ 缂哄瓧娈靛吋瀹?*/
+/** 旧存档 / 缺字段兼容 */
 function migrateWorld(w) {
   if (!w.retiredPlayers) w.retiredPlayers = [];
   ensureMedia(w);
@@ -749,12 +749,12 @@ function migrateWorld(w) {
       ensureHonors(p);
     }
   }
-  // 鏃ф。鑻ヤ笉瓒充笁绾х粨鏋勶紝鎻愮ず寮€鏂版。浣撻獙瀹屾暣鍗囬檷绾?
+  // 旧档若不足三级结构，提示开新档体验完整升降级
   const counts = { 1: 0, 2: 0, 3: 0 };
   for (const c of w.clubs || []) counts[c.division || 3]++;
   if (counts[1] < 4 || counts[2] < 4 || counts[3] < 4) {
-    // 浠嶅彲鐜╋紝浣嗗崌闄嶇骇鍙兘璺宠繃
-    console.warn("瀛樻。鑱旇禌缁撴瀯涓嶅畬鏁达紝寤鸿寮€鏂版。浣撻獙涓夌骇鑱旇禌");
+    // 仍可玩，但升降级可能跳过
+    console.warn("存档联赛结构不完整，建议开新档体验三级联赛");
   }
 }
 
@@ -780,7 +780,7 @@ function bindMainOnce() {
     };
   });
 
-  // 淇＄绛涢€?+ 姒傝鍏ュ彛
+  // 信箱筛选 + 概览入口
   document.querySelectorAll("[data-inbox-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       inboxFilter = btn.dataset.inboxFilter || "pending";
@@ -805,7 +805,7 @@ function bindMainOnce() {
     } else toast(t("toast.exportFail"));
   };
 
-  // 姣旇禌鍊嶉€燂紙鍚?脳0.5 鎱㈡斁锛?
+  // 比赛倍速（含 ×0.5 慢放）
   document.querySelectorAll("[data-match-speed]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = Number(btn.dataset.matchSpeed);
@@ -816,20 +816,20 @@ function bindMainOnce() {
         /* ignore */
       }
       syncMatchSpeedUI();
-      toast(getLang() === "en" ? `Speed 脳${matchSpeed}` : `姣旇禌鍊嶉€?脳${matchSpeed}`);
+      toast(getLang() === "en" ? `Speed ×${matchSpeed}` : `比赛倍速 ×${matchSpeed}`);
     });
   });
 
-  // FMM锛歺G / 鎺х悆 / 灏勯棬 鎶樺彔
+  // FMM：xG / 控球 / 射门 折叠
   $("#btn-match-stats-toggle")?.addEventListener("click", () => toggleMatchStatsPanel());
 
-  // 鏆傚仠 / 涓嬩竴姝?/ 閫愪簨浠?
+  // 暂停 / 下一步 / 逐事件
   $("#btn-match-pause")?.addEventListener("click", () => toggleMatchPause());
   $("#btn-match-sfx")?.addEventListener("click", () => toggleMatchSfx());
   $("#btn-match-step")?.addEventListener("click", () => requestMatchStep());
   $("#btn-match-step-mode")?.addEventListener("click", () => toggleMatchStepMode());
 
-  // 浜嬩欢娴?/ 璧涘悗鎶ュ憡锛氱偣杩涚悆鍐嶇湅鍥炴斁
+  // 事件流 / 赛后报告：点进球再看回放
   $("#match-log")?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-goal-replay]");
     if (!btn) return;
@@ -849,7 +849,7 @@ function bindMainOnce() {
     autosave("menu");
     if (confirm(getLang() === "en"
       ? `Return to menu? (auto-saved to slot ${getActiveSlot()})`
-      : `杩斿洖涓昏彍鍗曪紵锛堝凡鑷姩瀛樺埌妲?${getActiveSlot()}锛塦)) {
+      : `返回主菜单？（已自动存到槽 ${getActiveSlot()}）`)) {
       showScreen("start");
       refreshSlotUI();
       $("#start-hint").textContent = hasAnySave()
@@ -877,10 +877,10 @@ function bindMainOnce() {
   formSel.innerHTML = Object.keys(FORMATIONS)
     .map((k) => {
       const f = FORMATIONS[k];
-      return `<option value="${k}">${f.name}${f.desc ? ` 路 ${f.desc}` : ""}</option>`;
+      return `<option value="${k}">${f.name}${f.desc ? ` · ${f.desc}` : ""}</option>`;
     })
     .join("");
-  // 涓満闃靛瀷涓嬫媺
+  // 中场阵型下拉
   const htForm = $("#ht-formation");
   if (htForm) {
     htForm.innerHTML = Object.keys(FORMATIONS)
@@ -913,7 +913,7 @@ function bindMainOnce() {
       club.tactics[key] = +e.target.value;
       const lab = tacticsSliderLabel(key === "defensiveLine" ? "defensiveLine" : key, e.target.value, getLang());
       const valEl = $(valId);
-      if (valEl) valEl.textContent = `${e.target.value} 路 ${lab}`;
+      if (valEl) valEl.textContent = `${e.target.value} · ${lab}`;
       renderTacticsSummary();
       saveGame(world);
     };
@@ -923,7 +923,7 @@ function bindMainOnce() {
   bindTacSlider("#width", "width", "#width-val");
   bindTacSlider("#defensive-line", "defensiveLine", "#defensive-line-val");
 
-  // 棰勮鎸夐挳
+  // 预设按钮
   const presetBox = $("#tac-presets");
   if (presetBox && !presetBox._bound) {
     presetBox._bound = true;
@@ -972,7 +972,7 @@ function bindMainOnce() {
     }
   };
 
-  // 璁炬柦椤垫寜閽敤浜嬩欢濮旀墭锛堝姩鎬佹覆鏌擄級
+  // 设施页按钮用事件委托（动态渲染）
   const facGrid = $("#facilities-grid");
   if (facGrid && !facGrid._bound) {
     facGrid._bound = true;
@@ -991,7 +991,7 @@ function bindMainOnce() {
 
   $("#btn-refresh-staff").onclick = () => {
     refreshStaffMarket(world);
-    // 鍒锋柊璐?
+    // 刷新费
     const club = getUserClub(world);
     const fee = 50_000;
     if (club.money >= fee) {
@@ -1033,7 +1033,7 @@ function bindMainOnce() {
     });
   }
 
-  // 绉垎姒?/ 璧涚▼ / 鏁版嵁姒滅瓑锛氱偣鍑婚槦鍚嶆墦寮€淇变箰閮ㄨ鎯?
+  // 积分榜 / 赛程 / 数据榜等：点击队名打开俱乐部详情
   document.body.addEventListener("click", (e) => {
     if (!world) return;
     const clubLink = e.target.closest("[data-club-link]");
@@ -1042,7 +1042,7 @@ function bindMainOnce() {
       showClubModal(clubLink.dataset.clubLink);
       return;
     }
-    // 浠绘剰鐣岄潰锛氱偣鍑荤悆鍛樺悕鎵撳紑璧勬枡
+    // 任意界面：点击球员名打开资料
     const playerLink = e.target.closest("[data-player-link]");
     if (playerLink) {
       e.preventDefault();
@@ -1066,7 +1066,7 @@ function bindMainOnce() {
     destroyMatchView();
     matchView = null;
     matchPlayback.reviewMode = false;
-    // 鎭㈠鎸夐挳鏂囨锛堝洖椤炬椂鏀规垚浜嗐€岃繑鍥炰勘涔愰儴銆嶏級
+    // 恢复按钮文案（回顾时改成了「返回俱乐部」）
     const cont = $("#btn-match-continue");
     if (cont) cont.textContent = t("match.continue");
     showScreen("main");
@@ -1075,13 +1075,13 @@ function bindMainOnce() {
     pendingSubs = [];
     refreshAll();
     if (wasReview) {
-      // 鍥炲埌璧涚▼椤碉紝鏂逛究杩炵画鍥炵湅
+      // 回到赛程页，方便连续回看
       const tabBtn = document.querySelector('[data-tab="fixtures"]');
       if (tabBtn) tabBtn.click();
     }
   };
 
-  // 璧涚▼锛氱偣鍑汇€屾垬鎶ャ€嶆墦寮€鏃у満鍥炵湅
+  // 赛程：点击「战报」打开旧场回看
   $("#fixtures-table")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".fix-report-btn");
     if (!btn) return;
@@ -1089,7 +1089,7 @@ function bindMainOnce() {
     openPastMatchReport(btn.dataset.fixtureKey);
   });
 
-  // 涓満璋冩暣
+  // 中场调整
   const bindHtVal = (inputId, valId) => {
     const el = $(inputId);
     if (!el) return;
@@ -1143,7 +1143,7 @@ function refreshAll() {
   checkExportReminder();
 }
 
-/** 淇＄绛涢€夛細pending | all */
+/** 信箱筛选：pending | all */
 let inboxFilter = "pending";
 
 function updateInboxTabBadge() {
@@ -1151,7 +1151,7 @@ function updateInboxTabBadge() {
   const n = pendingInboxCount(world);
   const btn = document.querySelector('.tab[data-tab="inbox"]');
   if (!btn) return;
-  const base = t("tab.inbox") || (getLang() === "en" ? "Inbox" : "淇＄");
+  const base = t("tab.inbox") || (getLang() === "en" ? "Inbox" : "信箱");
   btn.textContent = n > 0 ? `${base} (${n})` : base;
   btn.classList.toggle("has-badge", n > 0);
 }
@@ -1172,11 +1172,11 @@ function renderInbox() {
   const countEl = $("#inbox-count");
   if (countEl) {
     countEl.textContent = en
-      ? `${pending} pending 路 ${list.length} shown`
-      : `寰呭姙 ${pending} 路 鏄剧ず ${list.length}`;
+      ? `${pending} pending · ${list.length} shown`
+      : `待办 ${pending} · 显示 ${list.length}`;
   }
 
-  // 绛涢€夋寜閽珮浜?
+  // 筛选按钮高亮
   document.querySelectorAll("[data-inbox-filter]").forEach((b) => {
     b.classList.toggle("active", b.dataset.inboxFilter === inboxFilter);
   });
@@ -1187,11 +1187,11 @@ function renderInbox() {
     box.innerHTML = `<p class="muted inbox-empty">${escapeHtml(
       en
         ? pendingOnly
-          ? "No pending mail 鈥?you're clear."
+          ? "No pending mail — you're clear."
           : "Inbox is empty."
         : pendingOnly
-          ? "鏆傛棤寰呭姙閭欢锛屾竻娓呯埥鐖姐€?
-          : "淇＄涓虹┖銆?
+          ? "暂无待办邮件，清清爽爽。"
+          : "信箱为空。"
     )}</p>`;
     return;
   }
@@ -1203,23 +1203,23 @@ function renderInbox() {
         m.status === "pending"
           ? en
             ? "Pending"
-            : "寰呭姙"
+            : "待办"
           : m.status === "read"
             ? en
               ? "Read"
-              : "宸茶"
+              : "已读"
             : m.status === "done"
               ? en
                 ? "Done"
-                : "宸插鐞?
+                : "已处理"
               : en
                 ? "Expired"
-                : "杩囨湡";
+                : "过期";
       const pri =
         (m.priority || 1) >= 3
-          ? `<span class="inbox-pri high">${en ? "Urgent" : "绱ф€?}</span>`
+          ? `<span class="inbox-pri high">${en ? "Urgent" : "紧急"}</span>`
           : (m.priority || 1) >= 2
-            ? `<span class="inbox-pri mid">${en ? "Important" : "閲嶈"}</span>`
+            ? `<span class="inbox-pri mid">${en ? "Important" : "重要"}</span>`
             : "";
       const actions =
         m.status === "pending" || m.status === "read"
@@ -1251,11 +1251,11 @@ function renderInbox() {
     btn.onclick = () => {
       const id = btn.dataset.inboxId;
       const act = btn.dataset.inboxAct;
-      if (act === "accept" && !confirm(en ? "Accept offer and sell the player?" : "纭鎺ュ彈鎶ヤ环骞舵斁璧扮悆鍛橈紵")) {
+      if (act === "accept" && !confirm(en ? "Accept offer and sell the player?" : "确认接受报价并放走球员？")) {
         return;
       }
       const res = resolveInboxAction(world, id, act);
-      toast(res.msg || (res.ok ? "OK" : "澶辫触"));
+      toast(res.msg || (res.ok ? "OK" : "失败"));
       if (res.sacked || world.sacked) {
         handleSacked(res);
         return;
@@ -1266,7 +1266,7 @@ function renderInbox() {
       }
     };
   });
-  // 鐐规爣棰樻爣宸茶
+  // 点标题标已读
   box.querySelectorAll(".inbox-item").forEach((el) => {
     el.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-inbox-act]")) return;
@@ -1303,7 +1303,7 @@ function renderTraining() {
         setTraining(club, { focus: btn.dataset.focus });
         autosave("training-focus");
         renderTraining();
-        toast(`璁粌閲嶇偣锛?{TRAINING_FOCUSES[btn.dataset.focus].label}`);
+        toast(`训练重点：${TRAINING_FOCUSES[btn.dataset.focus].label}`);
       };
     });
   }
@@ -1324,7 +1324,7 @@ function renderTraining() {
         setTraining(club, { intensity: btn.dataset.intensity });
         autosave("training-intensity");
         renderTraining();
-        toast(`璁粌寮哄害锛?{TRAINING_INTENSITIES[btn.dataset.intensity].label}`);
+        toast(`训练强度：${TRAINING_INTENSITIES[btn.dataset.intensity].label}`);
       };
     });
   }
@@ -1332,10 +1332,10 @@ function renderTraining() {
   const sumEl = $("#training-summary");
   if (sumEl) {
     const coach = club.staff?.coach;
-    const coachTxt = coach ? `鏁欑粌 ${coach.name}锛?{coach.rating}锛塦 : "鏁欑粌 鈥?;
-    sumEl.innerHTML = `<strong>褰撳墠锛?/strong>${escapeHtml(sum.line)}<br>
+    const coachTxt = coach ? `教练 ${coach.name}（${coach.rating}）` : "教练 —";
+    sumEl.innerHTML = `<strong>当前：</strong>${escapeHtml(sum.line)}<br>
       <span class="muted">${escapeHtml(sum.desc)}</span><br>
-      <span class="muted">${escapeHtml(coachTxt)} 路 姣忓懆缁撶畻灞炴€ф垚闀?路 姣忔棩褰卞搷浣撹兘涓庝激鐥呴闄?/span>`;
+      <span class="muted">${escapeHtml(coachTxt)} · 每周结算属性成长 · 每日影响体能与伤病风险</span>`;
   }
 
   const players = [...(club.players || [])].sort(
@@ -1356,23 +1356,23 @@ function renderTraining() {
         .map((p) => {
           const fit = Math.round(p.fitness || 0);
           const lowCls = fit < 65 || p.injured > 0 ? " low" : "";
-          const tag = p.injured > 0 ? " 浼? : "";
+          const tag = p.injured > 0 ? " 伤" : "";
           return `<div class="training-fit-row${lowCls}">
             <span>${playerLinkHtml(p.id, playerDisplaySurname(p.name, p.nationality) + tag)}</span>
             <div class="bar"><i style="width:${fit}%"></i></div>
             <span class="fit-val">${fit}%</span>
           </div>`;
         })
-        .join("") || `<span class="muted">鏆傛棤鐞冨憳</span>`;
+        .join("") || `<span class="muted">暂无球员</span>`;
   }
 
   const hint = $("#training-hint");
   if (hint) {
-    let tip = `骞冲潎浣撹兘 ${avg}% 路 浼ょ梾 ${injured} 浜?路 浣庝綋鑳?${low} 浜恒€俙;
-    if (avg < 70) tip += " 寤鸿鏀广€屾仮澶嶈皟鏁淬€嶆垨銆岃交鏉俱€嶅己搴︺€?;
-    else if (t.intensity === "hard" && avg < 80) tip += " 楂樺己搴︿笅浣撹兘鍋忕揣锛屽皬蹇冭缁冧激銆?;
-    else if (t.focus === "youth") tip += " 闈掕渚ч噸鏃舵湰鍛ㄩ潚璁垚闀垮姞蹇紝涓€绾块槦鎴愰暱鍋忔參銆?;
-    else tip += " 姣旇禌鏃ュ墠鍙垏銆岃禌鍓嶅噯澶囥€嶃€?;
+    let tip = `平均体能 ${avg}% · 伤病 ${injured} 人 · 低体能 ${low} 人。`;
+    if (avg < 70) tip += " 建议改「恢复调整」或「轻松」强度。";
+    else if (t.intensity === "hard" && avg < 80) tip += " 高强度下体能偏紧，小心训练伤。";
+    else if (t.focus === "youth") tip += " 青训侧重时本周青训成长加快，一线队成长偏慢。";
+    else tip += " 比赛日前可切「赛前准备」。";
     hint.textContent = tip;
   }
 }
@@ -1398,17 +1398,17 @@ function renderStaff() {
             <h3 style="margin:0.15rem 0">${escapeHtml(s.name)}</h3>
           </div>
         </div>
-        <div class="meta">鑳藉姏 <strong class="${ovrClass(s.rating)}">${s.rating}</strong> 路 ${s.age} 宀?/div>
-        <div class="meta">鍛ㄨ柂 ${formatMoney(s.wage)}</div>
+        <div class="meta">能力 <strong class="${ovrClass(s.rating)}">${s.rating}</strong> · ${s.age} 岁</div>
+        <div class="meta">周薪 ${formatMoney(s.wage)}</div>
         <p class="hint" style="margin:0.4rem 0">${meta.effect}</p>
-        <button class="btn small danger" data-fire="${role}">瑙ｇ害</button>
+        <button class="btn small danger" data-fire="${role}">解约</button>
       </div>`;
     })
     .join("");
 
   box.querySelectorAll("[data-fire]").forEach((btn) => {
     btn.onclick = () => {
-      if (!confirm("瑙ｇ害闇€鏀粯绾?4 鍛ㄨ柂姘翠綔涓鸿ˉ鍋匡紝纭锛?)) return;
+      if (!confirm("解约需支付约 4 周薪水作为补偿，确认？")) return;
       const res = fireStaffForUser(world, btn.dataset.fire);
       toast(res.msg);
       if (res.ok) {
@@ -1429,7 +1429,7 @@ function renderStaff() {
         <td>${s.age}</td>
         <td>${formatMoney(s.wage)}</td>
         <td>${formatMoney(fee)}</td>
-        <td><button class="btn small primary" data-hire="${s.id}">鑱樿</button></td>
+        <td><button class="btn small primary" data-hire="${s.id}">聘请</button></td>
       </tr>`;
     })
     .join("");
@@ -1458,15 +1458,15 @@ function renderMedia() {
           const tone = a.tone || "neutral";
           return `<article class="media-card ${tone}">
             <div class="outlet">
-              <span>${escapeHtml(a.outlet || "濯掍綋")}</span>
-              <span>S${a.season || world.season} 路 D${a.day ?? "鈥?}</span>
+              <span>${escapeHtml(a.outlet || "媒体")}</span>
+              <span>S${a.season || world.season} · D${a.day ?? "—"}</span>
             </div>
             <h3>${escapeHtml(a.headline)}</h3>
             <p class="body">${escapeHtml(a.body || "")}</p>
           </article>`;
         })
         .join("")
-    : `<p class="muted">鏆傛棤鎶ラ亾銆傛瘮璧涖€佽浆浼氥€佹帹杩涙棩绋嬪悗浼氬嚭鐜板獟浣撳唴瀹广€?/p>`;
+    : `<p class="muted">暂无报道。比赛、转会、推进日程后会出现媒体内容。</p>`;
 }
 
 function playerStats(p) {
@@ -1476,7 +1476,7 @@ function playerStats(p) {
 
 function careerStats(p) {
   ensurePlayerHistory(p);
-  // 鐢熸动灞曠ず = 宸插綊妗?career + 褰撳墠璧涘灏氭湭褰掓。鐨?stats
+  // 生涯展示 = 已归档 career + 当前赛季尚未归档的 stats
   const c = p.career || emptyMatchStats();
   const s = p.stats || emptyMatchStats();
   return {
@@ -1497,10 +1497,10 @@ function renderTopbar() {
     { id: `mgr_${world.userClubId}_${world.managerName}`, name: world.managerName, age: 42 },
     { role: "manager", size: 28 }
   );
-  $("#manager-name").innerHTML = `${mgrAv} <span>${escapeHtml(world.managerName)} 路 ${div?.short || "涔欑骇"}</span>`;
+  $("#manager-name").innerHTML = `${mgrAv} <span>${escapeHtml(world.managerName)} · ${div?.short || "乙级"}</span>`;
   $("#season-label").textContent = t("top.season", { n: world.season });
   const tw = transferWindowShort(world);
-  $("#date-label").textContent = `${t("top.day", { n: world.day })} 路 ${tw}`;
+  $("#date-label").textContent = `${t("top.day", { n: world.day })} · ${tw}`;
   $("#money-label").textContent = formatMoney(club.money);
 }
 
@@ -1521,10 +1521,10 @@ function renderDashboard() {
   if (seasonDone) {
     const divName = DIVISIONS[club.division || 3]?.name || "";
     box.innerHTML = `
-      <div><strong>${world.season} 璧涘宸茬粨鏉?/strong></div>
+      <div><strong>${world.season} 赛季已结束</strong></div>
       <div class="muted" style="margin-top:0.4rem">
-        褰撳墠鑱旇禌锛?{divName}<br/>
-        宸插鐞嗗勾榫?/ 閫€褰?/ 鍗囬檷绾с€傝繘鍏ヤ笅涓€璧涘灏嗘寜鏂扮骇鍒敓鎴愯禌绋嬨€?
+        当前联赛：${divName}<br/>
+        已处理年龄 / 退役 / 升降级。进入下一赛季将按新级别生成赛程。
       </div>
     `;
     playBtn.disabled = true;
@@ -1547,36 +1547,36 @@ function renderDashboard() {
     const brief = ready ? buildBriefingForFixture(next, club) : null;
     const briefHtml = brief ? renderPrematchBriefHtml(brief, { compact: true }) : "";
     box.innerHTML = `
-      <div><strong>${next.competition === "cup" ? next.roundLabel || "鏉禌" : `绗?${next.round} 杞甡}</strong> 路 绗?${next.day} 澶?路 ${next.home === club.id ? "涓诲満" : "瀹㈠満"}</div>
+      <div><strong>${next.competition === "cup" ? next.roundLabel || "杯赛" : `第 ${next.round} 轮`}</strong> · 第 ${next.day} 天 · ${next.home === club.id ? "主场" : "客场"}</div>
       <div style="margin-top:0.4rem;font-size:1.25rem">
         ${clubLinkHtml(home.id, home.name)} <span class="muted">vs</span> ${clubLinkHtml(away.id, away.name)}
       </div>
       <div class="muted" style="margin-top:0.35rem">
-        ${ready ? (getLang() === "en" ? "Matchday 路 Pre-match briefing" : "鍙互寮€璧?路 璧涘墠绠€鎶?) : (getLang() === "en" ? `${next.day - world.day} day(s) to go` : `杩橀渶绛夊緟 ${next.day - world.day} 澶ー)}
+        ${ready ? (getLang() === "en" ? "Matchday · Pre-match briefing" : "可以开赛 · 赛前简报") : (getLang() === "en" ? `${next.day - world.day} day(s) to go` : `还需等待 ${next.day - world.day} 天`)}
       </div>
       ${briefHtml}
     `;
     playBtn.disabled = !ready;
     playBtn.textContent = ready ? t("dash.play") : t("dash.notMatchday");
     advanceBtn.disabled = false;
-    // 姣旇禌鏃ュ綋澶╋細搴斿厛韪㈡瘮璧涳紝绂佺敤璺冲埌涓嬪満 / 璧涘鏈?
+    // 比赛日当天：应先踢比赛，禁用跳到下场 / 赛季末
     if (advanceMatchBtn) advanceMatchBtn.disabled = ready;
     if (advanceSeasonBtn) advanceSeasonBtn.disabled = ready;
     nextSeasonBtn.style.display = "none";
   }
 
-  // 缁忕悊鐢熸动鎽樿
+  // 经理生涯摘要
   const careerBox = $("#manager-career-dash");
   if (careerBox) {
     const mc = ensureManagerCareer(world);
     const wr = managerWinRate(mc);
     careerBox.innerHTML = `
-      <div><strong>${escapeHtml(world.managerName)}</strong> 路 ${mc.seasons} 璧涘 路 ${mc.matches} 鍦?/div>
-      <div class="muted" style="margin-top:0.25rem">${mc.wins}鑳?${mc.draws}骞?${mc.losses}璐?路 鑳滅巼 ${wr}%</div>
-      <div class="muted">${mc.titles} 鍐?路 ${mc.promotions} 娆″崌绾?路 ${mc.cups} 鏉?路 瑙ｉ泧 ${mc.sacked}</div>
+      <div><strong>${escapeHtml(world.managerName)}</strong> · ${mc.seasons} 赛季 · ${mc.matches} 场</div>
+      <div class="muted" style="margin-top:0.25rem">${mc.wins}胜 ${mc.draws}平 ${mc.losses}负 · 胜率 ${wr}%</div>
+      <div class="muted">${mc.titles} 冠 · ${mc.promotions} 次升级 · ${mc.cups} 杯 · 解雇 ${mc.sacked}</div>
       ${
         mc.bestFinish
-          ? `<div class="muted">鏈€浣筹細${mc.bestFinish.season} ${escapeHtml(mc.bestFinish.divName)} 绗?${mc.bestFinish.pos}</div>`
+          ? `<div class="muted">最佳：${mc.bestFinish.season} ${escapeHtml(mc.bestFinish.divName)} 第 ${mc.bestFinish.pos}</div>`
           : ""
       }
     `;
@@ -1589,24 +1589,24 @@ function renderDashboard() {
   const divName = DIVISIONS[userDiv]?.name || "";
   const promoHint =
     userDiv === 3
-      ? "锛堝墠 3 鍚嶅崌绾х敳绾э級"
+      ? "（前 3 名升级甲级）"
       : userDiv === 2
-        ? "锛堝墠 3 鍗囪秴鑱?路 鍚?3 闄嶄箼绾э級"
-        : "锛堝悗 3 鍚嶉檷鐢茬骇锛?;
-  $("#my-rank").textContent = `${divName} 绗?${pos} 鍚?路 ${row.pts} 鍒嗭紙${row.w}鑳?${row.d}骞?${row.l}璐燂級${promoHint}`;
+        ? "（前 3 升超联 · 后 3 降乙级）"
+        : "（后 3 名降甲级）";
+  $("#my-rank").textContent = `${divName} 第 ${pos} 名 · ${row.pts} 分（${row.w}胜 ${row.d}平 ${row.l}负）${promoHint}`;
 
-  // 褰撳墠璁粌锛堟瑙堜竴鐪煎彲瑙侊級
+  // 当前训练（概览一眼可见）
   const trainDash = document.querySelector("#training-dash");
   if (trainDash) {
     trainDash.textContent = trainingSummary(club).line + t("dash.trainHint");
   }
-  // 璁炬柦鎽樿
+  // 设施摘要
   let facDash = document.querySelector("#facilities-dash");
   if (!facDash) {
     const trainEl = document.querySelector("#training-dash");
     if (trainEl && trainEl.parentElement) {
       const h = document.createElement("h3");
-      h.textContent = "淇变箰閮ㄨ鏂?;
+      h.textContent = "俱乐部设施";
       facDash = document.createElement("div");
       facDash.id = "facilities-dash";
       facDash.className = "muted";
@@ -1620,7 +1620,7 @@ function renderDashboard() {
     facDash.textContent = facilitySummaryLine(club) + t("dash.facHint");
   }
 
-  // 杞細绐?
+  // 转会窗
   ensureTransferWindow(world);
   const twDash = document.querySelector("#transfer-window-dash");
   if (twDash) {
@@ -1647,18 +1647,18 @@ function renderDashboard() {
       const tone = boardTone(b);
       boardEl.className = "board-box" + (tone ? " " + tone : "");
       const played = row.played || 0;
-      const warn = !b.settled && (b.sackWarnings || 0) > 0 ? ` 璀﹀憡${b.sackWarnings}/3` : "";
+      const warn = !b.settled && (b.sackWarnings || 0) > 0 ? ` 警告${b.sackWarnings}/3` : "";
       boardEl.textContent =
         boardStatusLine(b) +
-        (b.settled || b.sacked ? "" : ` 路 鐜扮${pos}/鐩爣${b.targetPos} 路 ${played}鍦?{warn}`);
+        (b.settled || b.sacked ? "" : ` · 现第${pos}/目标${b.targetPos} · ${played}场${warn}`);
     }
   }
   $("#news-list").innerHTML = world.news
     .slice(0, 12)
     .map((n) => `<li><strong>D${n.day}</strong> ${escapeHtml(n.text)}</li>`)
-    .join("") || "<li>鏆傛棤鏂伴椈</li>";
+    .join("") || "<li>暂无新闻</li>";
 
-  // 姒傝淇＄鎽樿
+  // 概览信箱摘要
   ensureInbox(world);
   syncPoachBidsToInbox(world);
   const dashIb = $("#dash-inbox");
@@ -1667,7 +1667,7 @@ function renderDashboard() {
     const n = pendingInboxCount(world);
     const top = listInbox(world, { pendingOnly: true, limit: 3 });
     if (!n && !top.length) {
-      dashIb.innerHTML = `<span class="muted">${escapeHtml(en ? "No pending mail" : "鏆傛棤寰呭姙")}</span>`;
+      dashIb.innerHTML = `<span class="muted">${escapeHtml(en ? "No pending mail" : "暂无待办")}</span>`;
     } else {
       const lines = top
         .map(
@@ -1675,7 +1675,7 @@ function renderDashboard() {
             `<div class="dash-inbox-row"><span class="inbox-cat mini">${escapeHtml(inboxCatLabel(m.category, en ? "en" : "zh"))}</span> ${escapeHtml(m.title)}</div>`
         )
         .join("");
-      dashIb.innerHTML = `<div class="dash-inbox-count">${en ? `${n} pending` : `${n} 灏佸緟鍔瀈}</div>${lines}`;
+      dashIb.innerHTML = `<div class="dash-inbox-count">${en ? `${n} pending` : `${n} 封待办`}</div>${lines}`;
     }
   }
 }
@@ -1688,7 +1688,7 @@ function ovrClass(n) {
 
 function renderSquad() {
   const club = getUserClub(world);
-  // 鏃у瓨妗ｉ噷浣撹兘鍙兘鏄诞鐐癸紙璁粌 *0.6锛夛紱灞曠ず涓庡瓨妗ｄ竴骞舵敹鎴愭暣鏁?
+  // 旧存档里体能可能是浮点（训练 *0.6）；展示与存档一并收成整数
   for (const p of club.players || []) {
     if (p.fitness != null && !Number.isInteger(p.fitness)) {
       p.fitness = Math.round(Math.max(0, Math.min(100, p.fitness)));
@@ -1710,45 +1710,45 @@ function renderSquad() {
       const ovr = p.ovr || playerOverall(p);
       const s = playerStats(p);
       const isGk = p.pos === "GK";
-      // 鏈禌瀛ｏ細鍑哄満 / 杩涚悆路闆跺皝 / 鍔╂敾路澶辩悆
+      // 本赛季：出场 / 进球·零封 / 助攻·失球
       const apps = s.apps || 0;
       const colG = isGk ? s.cleanSheets || 0 : s.goals || 0;
       const colA = isGk ? s.goalsConceded || 0 : s.assists || 0;
       const gTitle = isGk
-        ? t("squad.csTitle") || "鏈禌瀛ｉ浂灏?
-        : t("squad.goalsTitle") || "鏈禌瀛ｈ繘鐞?;
+        ? t("squad.csTitle") || "本赛季零封"
+        : t("squad.goalsTitle") || "本赛季进球";
       const aTitle = isGk
-        ? t("squad.gaTitle") || "鏈禌瀛ｅけ鐞?
-        : t("squad.astTitle") || "鏈禌瀛ｅ姪鏀?;
+        ? t("squad.gaTitle") || "本赛季失球"
+        : t("squad.astTitle") || "本赛季助攻";
       const gCls = !isGk && colG > 0 ? "stat-high" : isGk && colG > 0 ? "stat-high" : "";
       const aCls =
         isGk && colA > 0 ? "stat-low" : !isGk && colA > 0 ? "stat-mid" : "";
       const avgR = seasonAvgRating(p);
       const lastR = s.lastRating != null ? s.lastRating : null;
-      const num = p.number != null ? p.number : "鈥?;
+      const num = p.number != null ? p.number : "—";
       const statusBadges = [
-        xi.has(p.id) ? '<span class="badge">棣栧彂</span>' : "",
-        p.loan ? `<span class="badge loan" title="${escapeHtml(t("contract.loanIn") || "绉熷€?)}">${escapeHtml(t("contract.loanIn") || "绉熷€?)}</span>` : "",
-        p.injured > 0 ? '<span class="badge ATT">浼?/span>' : "",
+        xi.has(p.id) ? '<span class="badge">首发</span>' : "",
+        p.loan ? `<span class="badge loan" title="${escapeHtml(t("contract.loanIn") || "租借")}">${escapeHtml(t("contract.loanIn") || "租借")}</span>` : "",
+        p.injured > 0 ? '<span class="badge ATT">伤</span>' : "",
         (p.suspendedMatches || 0) > 0
-          ? `<span class="badge ATT" title="鍋滆禌">鍋?{p.suspendedMatches}</span>`
+          ? `<span class="badge ATT" title="停赛">停${p.suspendedMatches}</span>`
           : "",
         (p.yellowsSeason || 0) >= 4 && !(p.suspendedMatches > 0)
-          ? `<span class="badge" style="background:#e6b450;color:#111" title="绱榛勭墝">榛?{p.yellowsSeason}</span>`
+          ? `<span class="badge" style="background:#e6b450;color:#111" title="累计黄牌">黄${p.yellowsSeason}</span>`
           : "",
         p._needsRenew
-          ? `<span class="badge contract-urgent" title="${escapeHtml(t("contract.needsRenew") || "寰呯画绾?)}">${escapeHtml(t("contract.needsRenew") || "寰呯画")}</span>`
+          ? `<span class="badge contract-urgent" title="${escapeHtml(t("contract.needsRenew") || "待续约")}">${escapeHtml(t("contract.needsRenew") || "待续")}</span>`
           : (p.contractYears || 0) <= 1 && !p.loan
-            ? `<span class="badge contract-short" title="${escapeHtml(t("contract.expiring") || "鍚堝悓灏嗗敖")}">${escapeHtml(t("contract.expiring") || "灏嗗敖")}</span>`
+            ? `<span class="badge contract-short" title="${escapeHtml(t("contract.expiring") || "合同将尽")}">${escapeHtml(t("contract.expiring") || "将尽")}</span>`
             : "",
       ]
         .filter(Boolean)
         .join(" ");
       const contractCell = p.loan
-        ? escapeHtml(t("contract.loanIn") || "绉熷€?)
+        ? escapeHtml(t("contract.loanIn") || "租借")
         : p._needsRenew
-          ? escapeHtml(t("contract.needsRenew") || "寰呯画绾?)
-          : `${p.contractYears ?? "鈥?}骞碻;
+          ? escapeHtml(t("contract.needsRenew") || "待续约")
+          : `${p.contractYears ?? "—"}年`;
       return `<tr class="${xi.has(p.id) ? "me" : ""} ${!isAvailable(p) ? "row-unavailable" : ""} ${needsContractAttention(p) && !p.loan ? "row-contract" : ""}">
         <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${num}</span></td>
         <td class="name-with-avatar">${playerAvatarHtml(p, club, 30)} <span>${playerLinkHtml(p.id, p.name)} ${statusBadges}</span></td>
@@ -1756,17 +1756,17 @@ function renderSquad() {
         <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
         <td>${p.age}</td>
         <td class="${ovrClass(ovr)}"><strong>${ovr}</strong></td>
-        <td class="num-stat" title="${escapeHtml(t("squad.appsTitle") || "鏈禌瀛ｅ嚭鍦?)}">${apps}</td>
+        <td class="num-stat" title="${escapeHtml(t("squad.appsTitle") || "本赛季出场")}">${apps}</td>
         <td class="num-stat ${gCls}" title="${escapeHtml(gTitle)}">${colG}</td>
         <td class="num-stat ${aCls}" title="${escapeHtml(aTitle)}">${colA}</td>
-        <td class="num-stat rating-cell ${ratingClass(avgR)}" title="${escapeHtml(t("squad.avgRTitle") || "鏈禌瀛ｅ満鍧囪瘎鍒?)}">${formatRating(avgR)}</td>
-        <td class="num-stat rating-cell ${ratingClass(lastR)}" title="${escapeHtml(t("squad.lastRTitle") || "鏈€杩戜竴鍦鸿瘎鍒?)}">${formatRating(lastR)}</td>
+        <td class="num-stat rating-cell ${ratingClass(avgR)}" title="${escapeHtml(t("squad.avgRTitle") || "本赛季场均评分")}">${formatRating(avgR)}</td>
+        <td class="num-stat rating-cell ${ratingClass(lastR)}" title="${escapeHtml(t("squad.lastRTitle") || "最近一场评分")}">${formatRating(lastR)}</td>
         <td>${Math.round(p.fitness ?? 0)}%</td>
         <td>${Math.round(p.morale ?? 0)}</td>
         <td class="contract-cell">${contractCell}</td>
         <td>${formatMoney(p.value)}</td>
         <td>${formatMoney(p.wage)}</td>
-        <td><button class="btn small" data-pid="${p.id}">璇︽儏</button></td>
+        <td><button class="btn small" data-pid="${p.id}">详情</button></td>
       </tr>`;
     })
     .join("");
@@ -1789,7 +1789,7 @@ function showPlayerModal(playerId) {
       }
     }
   }
-  // 閫€褰圭悆鍛樺巻鍙诧紙鑻ヤ箣鍚?UI 寮曠敤锛?
+  // 退役球员历史（若之后 UI 引用）
   if (!player && world.retiredPlayers) {
     player = world.retiredPlayers.find((p) => p.id === playerId);
   }
@@ -1806,7 +1806,7 @@ function showPlayerModal(playerId) {
     ? formatScoutPotFog(player, club, { ownPlayer: false })
     : player.potential != null
       ? String(player.potential)
-      : "鈥?;
+      : "—";
   const ovrShow = isOther
     ? formatScoutOvrFog(player, club, { ownPlayer: false })
     : String(player.ovr);
@@ -1818,14 +1818,14 @@ function showPlayerModal(playerId) {
   const intl = player.intl || {};
   const isGk = player.pos === "GK";
 
-  // 鍒嗚禌瀛ｅ巻鍙?+ 褰撳墠鏈綊妗ｈ禌瀛?
+  // 分赛季历史 + 当前未归档赛季
   const curAvgR = seasonAvgRating(player);
   const historyRows = [...(player.history || [])]
     .sort((a, b) => b.season - a.season)
     .map(
       (h) => `<tr>
         <td>${h.season}</td>
-        <td>${escapeHtml(h.clubName || "鈥?)}</td>
+        <td>${escapeHtml(h.clubName || "—")}</td>
         <td>${h.apps}</td>
         <td>${isGk ? h.cleanSheets : h.goals}</td>
         <td>${isGk ? h.goalsConceded : h.assists}</td>
@@ -1848,21 +1848,21 @@ function showPlayerModal(playerId) {
   }
 
   const histHead = isGk
-    ? `<th>璧涘</th><th>鐞冮槦</th><th>鍑哄満</th><th>闆跺皝</th><th>澶辩悆</th><th>鍦哄潎</th>`
-    : `<th>璧涘</th><th>鐞冮槦</th><th>鍑哄満</th><th>杩涚悆</th><th>鍔╂敾</th><th>鍦哄潎</th>`;
+    ? `<th>赛季</th><th>球队</th><th>出场</th><th>零封</th><th>失球</th><th>场均</th>`
+    : `<th>赛季</th><th>球队</th><th>出场</th><th>进球</th><th>助攻</th><th>场均</th>`;
 
   const honorHtml = (player.honors || []).length
     ? `<div class="honor-list">${player.honors
         .slice(0, 12)
         .map(
           (h) => `<div class="honor-item">
-            <div class="season">${h.season} 路 ${escapeHtml(h.clubName || "")}</div>
+            <div class="season">${h.season} · ${escapeHtml(h.clubName || "")}</div>
             <strong>${escapeHtml(h.title)}</strong>
-            ${h.detail ? ` <span class="muted">锛?{escapeHtml(h.detail)}锛?/span>` : ""}
+            ${h.detail ? ` <span class="muted">（${escapeHtml(h.detail)}）</span>` : ""}
           </div>`
         )
         .join("")}</div>`
-    : `<p class="muted" style="margin:0">鏆傛棤鑽ｈ獕锛岃禌瀛ｆ湯閲戦澊/鍔╂敾鐜?鏈€浣抽樀瀹?鍐犲啗绛変細鍐欏叆姝ゅ</p>`;
+    : `<p class="muted" style="margin:0">暂无荣誉，赛季末金靴/助攻王/最佳阵容/冠军等会写入此处</p>`;
 
   const kitClub = fromOther || club;
   if (kitClub) {
@@ -1878,34 +1878,34 @@ function showPlayerModal(playerId) {
     <h2 style="margin:0 0 0.25rem">${escapeHtml(player.name)}${player.number != null ? ` <span class="muted">#${player.number}</span>` : ""}</h2>
     <p class="muted">
       <span class="badge ${player.pos}">${POS_LABEL[player.pos]}</span>
-      路 ${nationLabel(player)}
-      路 ${player.age} 宀?路 鑳藉姏 <strong class="${isOther ? "" : ovrClass(player.ovr)}">${escapeHtml(ovrShow)}</strong>
-      路 娼滃姏 <strong>${escapeHtml(String(pot))}</strong>
-      ${player.fromYouth ? ' 路 <span class="badge MID">闈掕</span>' : ""}
-      ${fromOther ? ` 路 ${escapeHtml(fromOther.name)}` : ""}
-      ${isOther ? ` 路 <span class="muted">${getLang() === "en" ? "Scout fog" : "鐞冩帰鍙"} L${scoutFogLevel(club)}</span>` : ""}
+      · ${nationLabel(player)}
+      · ${player.age} 岁 · 能力 <strong class="${isOther ? "" : ovrClass(player.ovr)}">${escapeHtml(ovrShow)}</strong>
+      · 潜力 <strong>${escapeHtml(String(pot))}</strong>
+      ${player.fromYouth ? ' · <span class="badge MID">青训</span>' : ""}
+      ${fromOther ? ` · ${escapeHtml(fromOther.name)}` : ""}
+      ${isOther ? ` · <span class="muted">${getLang() === "en" ? "Scout fog" : "球探可见"} L${scoutFogLevel(club)}</span>` : ""}
     </p>
       </div>
     </div>
-    <p>韬环 ${fromOther ? formatScoutValue(world, player) : formatMoney(player.value)} 路 鍛ㄨ柂 ${formatMoney(player.wage)} 路 浣撹兘 ${Math.round(player.fitness ?? 0)}% 路 澹皵 ${Math.round(player.morale ?? 0)}
+    <p>身价 ${fromOther ? formatScoutValue(world, player) : formatMoney(player.value)} · 周薪 ${formatMoney(player.wage)} · 体能 ${Math.round(player.fitness ?? 0)}% · 士气 ${Math.round(player.morale ?? 0)}
       ${
         (player.suspendedMatches || 0) > 0
-          ? ` 路 <span class="badge ATT">鍋滆禌 ${player.suspendedMatches} 鍦?/span>`
+          ? ` · <span class="badge ATT">停赛 ${player.suspendedMatches} 场</span>`
           : ""
       }
       ${
         (player.yellowsSeason || 0) > 0
-          ? ` 路 璧涘榛勭墝 ${player.yellowsSeason}`
+          ? ` · 赛季黄牌 ${player.yellowsSeason}`
           : ""
       }
       ${
         player.loan
-          ? ` 路 <span class="badge loan">${escapeHtml(t("contract.loanIn") || "绉熷€?)}</span>`
+          ? ` · <span class="badge loan">${escapeHtml(t("contract.loanIn") || "租借")}</span>`
           : player.contractYears != null
-            ? ` 路 鍚堝悓 ${player.contractYears} 骞碻
+            ? ` · 合同 ${player.contractYears} 年`
             : ""
       }
-      ${player._needsRenew ? ` 路 <span class="badge contract-urgent">${escapeHtml(t("contract.needsRenew") || "寰呯画绾?)}</span>` : ""}
+      ${player._needsRenew ? ` · <span class="badge contract-urgent">${escapeHtml(t("contract.needsRenew") || "待续约")}</span>` : ""}
     </p>
     ${
       fromOther
@@ -1918,46 +1918,46 @@ function showPlayerModal(playerId) {
     }
     ${renderPlayerContractActions(player, fromOther)}
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">鏈禌瀛ｏ紙淇变箰閮級</h3>
-    <p class="muted" style="margin:0">鍑哄満 ${season.apps}
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">本赛季（俱乐部）</h3>
+    <p class="muted" style="margin:0">出场 ${season.apps}
       ${
         isGk
-          ? ` 路 闆跺皝 ${season.cleanSheets} 路 澶辩悆 ${season.goalsConceded}`
-          : ` 路 杩涚悆 ${season.goals} 路 鍔╂敾 ${season.assists}`
+          ? ` · 零封 ${season.cleanSheets} · 失球 ${season.goalsConceded}`
+          : ` · 进球 ${season.goals} · 助攻 ${season.assists}`
       }
-      路 鍦哄潎 <strong class="${ratingClass(curAvgR)}">${formatRating(curAvgR)}</strong>
+      · 场均 <strong class="${ratingClass(curAvgR)}">${formatRating(curAvgR)}</strong>
       ${
         season.lastRating != null
-          ? ` 路 鏈€杩?<strong class="${ratingClass(season.lastRating)}">${formatRating(season.lastRating)}</strong>`
+          ? ` · 最近 <strong class="${ratingClass(season.lastRating)}">${formatRating(season.lastRating)}</strong>`
           : ""
       }
     </p>
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">鐢熸动鎬昏锛堜勘涔愰儴锛?/h3>
-    <p class="muted" style="margin:0">鍑哄満 ${career.apps}
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">生涯总计（俱乐部）</h3>
+    <p class="muted" style="margin:0">出场 ${career.apps}
       ${
         isGk
-          ? ` 路 闆跺皝 ${career.cleanSheets} 路 澶辩悆 ${career.goalsConceded}`
-          : ` 路 杩涚悆 ${career.goals} 路 鍔╂敾 ${career.assists}`
+          ? ` · 零封 ${career.cleanSheets} · 失球 ${career.goalsConceded}`
+          : ` · 进球 ${career.goals} · 助攻 ${career.assists}`
       }
-      <span style="opacity:0.7">锛堝惈鏈禌瀛ｏ級</span>
+      <span style="opacity:0.7">（含本赛季）</span>
     </p>
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">鍥藉闃?/h3>
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">国家队</h3>
     <p class="muted" style="margin:0">
-      ${nationLabel(player)} 路 鍑哄満锛圕aps锛?<strong>${intl.caps || 0}</strong>
+      ${nationLabel(player)} · 出场（Caps） <strong>${intl.caps || 0}</strong>
       ${
         isGk
-          ? ` 路 闆跺皝 ${intl.cleanSheets || 0} 路 澶辩悆 ${intl.goalsConceded || 0}`
-          : ` 路 杩涚悆 ${intl.goals || 0} 路 鍔╂敾 ${intl.assists || 0}`
+          ? ` · 零封 ${intl.cleanSheets || 0} · 失球 ${intl.goalsConceded || 0}`
+          : ` · 进球 ${intl.goals || 0} · 助攻 ${intl.assists || 0}`
       }
     </p>
-    <p class="hint" style="margin:0.25rem 0 0">绾︽瘡 30 澶╁浗闄呮瘮璧涙棩锛屼紭绉€鐞冨憳鍙兘鍏ラ€夊苟绱Н鏁版嵁</p>
+    <p class="hint" style="margin:0.25rem 0 0">约每 30 天国际比赛日，优秀球员可能入选并累积数据</p>
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">涓汉鑽ｈ獕</h3>
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">个人荣誉</h3>
     ${honorHtml}
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">鍒嗚禌瀛ｅ巻鍙?/h3>
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">分赛季历史</h3>
     <div class="table-wrap">
       <table style="font-size:0.85rem">
         <thead><tr>${histHead}</tr></thead>
@@ -1965,14 +1965,14 @@ function showPlayerModal(playerId) {
           ${
             historyRows.length
               ? historyRows.join("")
-              : `<tr><td colspan="5" class="muted">鏆傛棤鍘嗗彶锛屽畬璧涘苟杩涘叆涓嬩竴璧涘鍚庡綊妗?/td></tr>`
+              : `<tr><td colspan="5" class="muted">暂无历史，完赛并进入下一赛季后归档</td></tr>`
           }
         </tbody>
       </table>
     </div>
-    <p class="hint" style="margin-top:0.35rem">* 琛ㄧず褰撳墠璧涘锛堝皻鏈綊妗ｏ級</p>
+    <p class="hint" style="margin-top:0.35rem">* 表示当前赛季（尚未归档）</p>
 
-    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">${isOther ? (getLang() === "en" ? "Attributes (scout)" : "灞炴€э紙鐞冩帰鍙锛?) : getLang() === "en" ? "Attributes" : "灞炴€?}</h3>
+    <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">${isOther ? (getLang() === "en" ? "Attributes (scout)" : "属性（球探可见）") : getLang() === "en" ? "Attributes" : "属性"}</h3>
     <div class="attrs${isOther ? " attrs-fogged" : ""}">
       ${fogRows
         .map((r) => {
@@ -1995,39 +1995,39 @@ function showPlayerModal(playerId) {
 }
 
 /**
- * 鏈槦鐞冨憳锛氱画绾?/ 瑙ｇ害 / 澶栫锛涗粬浜猴細绉熷叆锛堢獥鍐咃級
+ * 本队球员：续约 / 解约 / 外租；他人：租入（窗内）
  */
 function renderPlayerContractActions(player, fromOther) {
   if (!player || world?.sacked) return "";
   const en = getLang() === "en";
   const open = isTransferWindowOpen(world);
 
-  // 绉熷€熶腑鐨勬湰闃熺鍏?
+  // 租借中的本队租入
   if (!fromOther && player.loan) {
     const until =
       player.loan.untilDay >= 9999
         ? en
           ? "end of season"
-          : "璧涘鏈?
+          : "赛季末"
         : `D${player.loan.untilDay}`;
     return `<div class="contract-actions hint">
-      ${en ? "On loan until" : "绉熷€熻嚦"} ${escapeHtml(until)} 路 ${en ? "Cannot sell / terminate" : "涓嶅彲鍑哄敭鎴栬В绾?}
+      ${en ? "On loan until" : "租借至"} ${escapeHtml(until)} · ${en ? "Cannot sell / terminate" : "不可出售或解约"}
     </div>`;
   }
 
-  // 鏈槦姝ｅ紡鐞冨憳
+  // 本队正式球员
   if (!fromOther) {
     return `<div class="contract-actions">
-      <button type="button" class="btn small primary" data-act-renew="${player.id}">${escapeHtml(t("contract.renew") || (en ? "Renew" : "缁害"))}</button>
-      <button type="button" class="btn small danger" data-act-terminate="${player.id}">${escapeHtml(t("contract.terminate") || (en ? "Release" : "瑙ｇ害"))}</button>
-      <button type="button" class="btn small" data-act-loan-out="${player.id}" ${!open ? "disabled" : ""}>${escapeHtml(t("contract.loanOut") || (en ? "Loan out" : "澶栫"))}${!open ? (en ? " (window closed)" : "锛堢獥鍏筹級") : ""}</button>
+      <button type="button" class="btn small primary" data-act-renew="${player.id}">${escapeHtml(t("contract.renew") || (en ? "Renew" : "续约"))}</button>
+      <button type="button" class="btn small danger" data-act-terminate="${player.id}">${escapeHtml(t("contract.terminate") || (en ? "Release" : "解约"))}</button>
+      <button type="button" class="btn small" data-act-loan-out="${player.id}" ${!open ? "disabled" : ""}>${escapeHtml(t("contract.loanOut") || (en ? "Loan out" : "外租"))}${!open ? (en ? " (window closed)" : "（窗关）") : ""}</button>
     </div>`;
   }
 
-  // 浠栭槦锛氬彲绉熷叆
+  // 他队：可租入
   if (fromOther && !player.loan) {
     return `<div class="contract-actions">
-      <button type="button" class="btn small" data-act-loan-in="${player.id}" data-from="${fromOther.id}" ${!open ? "disabled" : ""}>${escapeHtml(t("contract.loanInBtn") || (en ? "Loan in" : "绉熷叆"))}${!open ? (en ? " (window closed)" : "锛堢獥鍏筹級") : ""}</button>
+      <button type="button" class="btn small" data-act-loan-in="${player.id}" data-from="${fromOther.id}" ${!open ? "disabled" : ""}>${escapeHtml(t("contract.loanInBtn") || (en ? "Loan in" : "租入"))}${!open ? (en ? " (window closed)" : "（窗关）") : ""}</button>
     </div>`;
   }
   return "";
@@ -2058,13 +2058,13 @@ function bindPlayerContractActions(player, fromOther) {
 function doRenewPlayer(playerId) {
   const prev = previewRenew(world, playerId);
   if (!prev) {
-    toast(getLang() === "en" ? "Player not found" : "鎵句笉鍒扮悆鍛?);
+    toast(getLang() === "en" ? "Player not found" : "找不到球员");
     return;
   }
   const yearsIn = prompt(
     getLang() === "en"
-      ? `${prev.player.name}\nSuggested: ${prev.offer.years}y 路 wage ${formatMoney(prev.offer.newWage)} 路 bonus ${formatMoney(prev.offer.fee)}\nYears (1鈥?):`
-      : `${prev.player.name}\n寤鸿锛?{prev.offer.years} 骞?路 鍛ㄨ柂 ${formatMoney(prev.offer.newWage)} 路 绛剧害濂?${formatMoney(prev.offer.fee)}\n鍚堝悓骞撮檺锛?鈥?锛夛細`,
+      ? `${prev.player.name}\nSuggested: ${prev.offer.years}y · wage ${formatMoney(prev.offer.newWage)} · bonus ${formatMoney(prev.offer.fee)}\nYears (1–5):`
+      : `${prev.player.name}\n建议：${prev.offer.years} 年 · 周薪 ${formatMoney(prev.offer.newWage)} · 签约奖 ${formatMoney(prev.offer.fee)}\n合同年限（1–5）：`,
     String(prev.offer.years)
   );
   if (yearsIn == null) return;
@@ -2073,8 +2073,8 @@ function doRenewPlayer(playerId) {
   if (
     !confirm(
       getLang() === "en"
-        ? `Renew ${final.player.name}?\n${years} years 路 wage ${formatMoney(final.offer.newWage)} 路 bonus ${formatMoney(final.offer.fee)}`
-        : `纭涓?${final.player.name} 缁害锛焅n${years} 骞?路 鍛ㄨ柂 ${formatMoney(final.offer.newWage)} 路 绛剧害濂?${formatMoney(final.offer.fee)}`
+        ? `Renew ${final.player.name}?\n${years} years · wage ${formatMoney(final.offer.newWage)} · bonus ${formatMoney(final.offer.fee)}`
+        : `确认与 ${final.player.name} 续约？\n${years} 年 · 周薪 ${formatMoney(final.offer.newWage)} · 签约奖 ${formatMoney(final.offer.fee)}`
     )
   ) {
     return;
@@ -2090,14 +2090,14 @@ function doRenewPlayer(playerId) {
 function doTerminatePlayer(playerId) {
   const prev = previewTerminate(world, playerId);
   if (!prev) {
-    toast(getLang() === "en" ? "Player not found" : "鎵句笉鍒扮悆鍛?);
+    toast(getLang() === "en" ? "Player not found" : "找不到球员");
     return;
   }
   if (
     !confirm(
       getLang() === "en"
-        ? `Release ${prev.player.name}?\nCompensation ${formatMoney(prev.cost)} 鈥?becomes free agent.`
-        : `纭涓?${prev.player.name} 瑙ｇ害锛焅n琛ュ伩 ${formatMoney(prev.cost)}锛岀悆鍛樺皢鎴愪负鑷敱韬€俙
+        ? `Release ${prev.player.name}?\nCompensation ${formatMoney(prev.cost)} — becomes free agent.`
+        : `确认与 ${prev.player.name} 解约？\n补偿 ${formatMoney(prev.cost)}，球员将成为自由身。`
     )
   ) {
     return;
@@ -2115,21 +2115,21 @@ function doLoanOut(playerId) {
   const termIn = prompt(
     en
       ? "Loan term: half (to next window) or season (end of season). Type half / season:"
-      : "绉熷€熸湡闄愶細half=鍒颁笅涓€绐楁湯 路 season=璧涘鏈€傝緭鍏?half 鎴?season锛?,
+      : "租借期限：half=到下一窗末 · season=赛季末。输入 half 或 season：",
     "half"
   );
   if (termIn == null) return;
   const term = String(termIn).toLowerCase().startsWith("s") ? "season" : "half";
   const prev = previewLoanOut(world, playerId, term);
   if (!prev) {
-    toast(en ? "Cannot loan this player" : "鏃犳硶澶栫璇ョ悆鍛?);
+    toast(en ? "Cannot loan this player" : "无法外租该球员");
     return;
   }
   if (
     !confirm(
       en
-        ? `Loan out ${prev.player.name}?\nFee ~${formatMoney(prev.fee)} 路 host pays ~${Math.round(prev.wageShare * 100)}% wages 路 until ${prev.untilDay >= 9999 ? "EOS" : "D" + prev.untilDay}`
-        : `纭澶栫 ${prev.player.name}锛焅n绉熷€熻垂绾?${formatMoney(prev.fee)} 路 瀵规柟鎵挎媴绾?${Math.round(prev.wageShare * 100)}% 钖按 路 鑷?${prev.untilDay >= 9999 ? "璧涘鏈? : "D" + prev.untilDay}`
+        ? `Loan out ${prev.player.name}?\nFee ~${formatMoney(prev.fee)} · host pays ~${Math.round(prev.wageShare * 100)}% wages · until ${prev.untilDay >= 9999 ? "EOS" : "D" + prev.untilDay}`
+        : `确认外租 ${prev.player.name}？\n租借费约 ${formatMoney(prev.fee)} · 对方承担约 ${Math.round(prev.wageShare * 100)}% 薪水 · 至 ${prev.untilDay >= 9999 ? "赛季末" : "D" + prev.untilDay}`
     )
   ) {
     return;
@@ -2147,21 +2147,21 @@ function doLoanIn(playerId, fromClubId) {
   const termIn = prompt(
     en
       ? "Loan term: half / season:"
-      : "绉熷€熸湡闄愶細half 鎴?season锛?,
+      : "租借期限：half 或 season：",
     "half"
   );
   if (termIn == null) return;
   const term = String(termIn).toLowerCase().startsWith("s") ? "season" : "half";
   const prev = previewLoanIn(world, playerId, fromClubId, term);
   if (!prev) {
-    toast(en ? "Cannot loan this player" : "鏃犳硶绉熷叆璇ョ悆鍛?);
+    toast(en ? "Cannot loan this player" : "无法租入该球员");
     return;
   }
   if (
     !confirm(
       en
-        ? `Loan in ${prev.player.name} from ${prev.from?.short || ""}?\nFee ${formatMoney(prev.fee)} 路 you pay ~${Math.round(prev.wageShare * 100)}% wages`
-        : `纭绉熷叆 ${prev.player.name}锛?{prev.from?.short || ""}锛夛紵\n绉熷€熻垂 ${formatMoney(prev.fee)} 路 鎴戞柟绾︽壙鎷?${Math.round(prev.wageShare * 100)}% 钖按`
+        ? `Loan in ${prev.player.name} from ${prev.from?.short || ""}?\nFee ${formatMoney(prev.fee)} · you pay ~${Math.round(prev.wageShare * 100)}% wages`
+        : `确认租入 ${prev.player.name}（${prev.from?.short || ""}）？\n租借费 ${formatMoney(prev.fee)} · 我方约承担 ${Math.round(prev.wageShare * 100)}% 薪水`
     )
   ) {
     return;
@@ -2179,7 +2179,7 @@ function doRecallLoan(playerId) {
     !confirm(
       getLang() === "en"
         ? "Recall this player? (fee if window closed)"
-        : "纭鍙洖璇ョ悆鍛橈紵锛堣浆浼氱獥澶栭渶鏀粯鍙洖璐癸級"
+        : "确认召回该球员？（转会窗外需支付召回费）"
     )
   ) {
     return;
@@ -2202,37 +2202,37 @@ function renderFacilities() {
   const items = [
     {
       kind: "stadium",
-      icon: "馃彑锔?,
+      icon: "🏟️",
       info: stadiumInfo(club),
       effect: (i) =>
-        `瀹归噺绾?${i.capacity.toLocaleString()} 路 涓诲満鏀跺叆绾?${formatMoney(i.matchday)}/鍦?路 鍛ㄧ淮鎶?${formatMoney(i.upkeep)}`,
+        `容量约 ${i.capacity.toLocaleString()} · 主场收入约 ${formatMoney(i.matchday)}/场 · 周维护 ${formatMoney(i.upkeep)}`,
       nextEffect: (lv) => {
         const n = STADIUM_LEVELS[lv];
         return n
-          ? `鈫?瀹归噺 ${n.capacity.toLocaleString()} 路 鏀跺叆绾?${formatMoney(n.matchday)}`
+          ? `→ 容量 ${n.capacity.toLocaleString()} · 收入约 ${formatMoney(n.matchday)}`
           : "";
       },
     },
     {
       kind: "training",
-      icon: "馃弸锔?,
+      icon: "🏋️",
       info: trainingFacilityInfo(club),
       effect: (i) =>
-        `鎴愰暱+${Math.round((i.growth || 0) * 1000) / 10}% 路 鎭㈠+${i.heal} 路 浼ょ梾脳${i.injuryMod} 路 鍛ㄧ淮鎶?${formatMoney(i.upkeep)}`,
+        `成长+${Math.round((i.growth || 0) * 1000) / 10}% · 恢复+${i.heal} · 伤病×${i.injuryMod} · 周维护 ${formatMoney(i.upkeep)}`,
       nextEffect: (lv) => {
         const n = TRAINING_FACILITY_LEVELS[lv];
-        return n ? `鈫?鎴愰暱+${Math.round(n.growth * 1000) / 10}% 路 鎭㈠+${n.heal}` : "";
+        return n ? `→ 成长+${Math.round(n.growth * 1000) / 10}% · 恢复+${n.heal}` : "";
       },
     },
     {
       kind: "youth",
-      icon: "馃尡",
+      icon: "🌱",
       info: youthFacilityInfo(club),
       effect: (i) =>
-        `瀹归噺 ${i.capacity} 路 鎷涚敓 ${i.intake}/鏈?路 鎴愰暱 ${i.growth} 路 鍛ㄧ淮鎶?${formatMoney(i.upkeep)}`,
+        `容量 ${i.capacity} · 招生 ${i.intake}/期 · 成长 ${i.growth} · 周维护 ${formatMoney(i.upkeep)}`,
       nextEffect: (lv) => {
         const n = YOUTH_LEVELS[lv];
-        return n ? `鈫?${n.name} 路 瀹归噺 ${n.capacity} 路 鎷涚敓 ${n.intake}` : "";
+        return n ? `→ ${n.name} · 容量 ${n.capacity} · 招生 ${n.intake}` : "";
       },
     },
   ];
@@ -2257,7 +2257,7 @@ function renderFacilities() {
       if (proj) {
         const left = Math.max(0, proj.finishDay - world.day);
         action = `<button class="btn small" disabled>${t("fac.building", { n: left })}</button>
-          <p class="hint" style="margin:0.4rem 0 0">鐩爣 Lv.${proj.to} ${escapeHtml(proj.name)}</p>`;
+          <p class="hint" style="margin:0.4rem 0 0">目标 Lv.${proj.to} ${escapeHtml(proj.name)}</p>`;
       } else if (lv >= FACILITY_MAX) {
         action = `<button class="btn small" disabled>${t("fac.maxed")}</button>`;
       } else {
@@ -2275,7 +2275,7 @@ function renderFacilities() {
       }
       return `<div class="facility-card">
         <div class="facility-title">${icon} ${label}</div>
-        <div class="facility-level">Lv.${lv} 路 ${escapeHtml(info.name)}</div>
+        <div class="facility-level">Lv.${lv} · ${escapeHtml(info.name)}</div>
         <p class="facility-effect">${escapeHtml(effect(info))}</p>
         ${action}
       </div>`;
@@ -2286,7 +2286,7 @@ function renderFacilities() {
   if (hint) {
     hint.textContent =
       facilitySummaryLine(club) +
-      " 路 涓诲満姣旇禌鑷姩鏀堕棬绁紱璁粌绛夌骇褰卞搷鏃ュ父璁粌涓庝激鐥呫€?;
+      " · 主场比赛自动收门票；训练等级影响日常训练与伤病。";
   }
 }
 
@@ -2294,7 +2294,7 @@ function renderYouth() {
   const club = getUserClub(world);
   ensureFacilities(club);
   const ya = ensureYouthAcademy(club);
-  // 涓庤鏂藉悓姝?
+  // 与设施同步
   if (club.facilities?.youth && club.facilities.youth !== ya.level) {
     ya.level = Math.max(ya.level, club.facilities.youth);
   }
@@ -2307,11 +2307,11 @@ function renderYouth() {
 
   $("#youth-info").innerHTML = `
     <div><strong>Lv.${ya.level}</strong> ${cfg.name}</div>
-    <div class="muted">瀹归噺 ${ya.players.length}/${cfg.capacity} 路 姣忔湡鎷涚敓 ${cfg.intake} 浜?/div>
-    <div class="muted">鍛ㄧ淮鎶よ垂 ${formatMoney(cfg.upkeep)} 路 涓嬫鎷涚敓绾?${daysLeft} 澶?/div>
+    <div class="muted">容量 ${ya.players.length}/${cfg.capacity} · 每期招生 ${cfg.intake} 人</div>
+    <div class="muted">周维护费 ${formatMoney(cfg.upkeep)} · 下次招生约 ${daysLeft} 天</div>
     ${
       building
-        ? `<div class="muted">馃毀 鍗囩骇鏂藉伐涓?路 绾︾ ${proj.finishDay} 澶╁畬宸?/div>`
+        ? `<div class="muted">🚧 升级施工中 · 约第 ${proj.finishDay} 天完工</div>`
         : ""
     }
   `;
@@ -2319,17 +2319,17 @@ function renderYouth() {
   const upBtn = $("#btn-youth-upgrade");
   if (ya.level >= 5) {
     upBtn.disabled = true;
-    upBtn.textContent = "宸叉弧绾?;
-    $("#youth-hint").textContent = "瀛﹂櫌宸叉槸涓栫晫绾э紝涓撳績鍩瑰吇濂借嫍瀛愬惂銆備篃鍙湪銆岃鏂姐€嶉〉鏌ョ湅鐞冨満涓庤缁冦€?;
+    upBtn.textContent = "已满级";
+    $("#youth-hint").textContent = "学院已是世界级，专心培养好苗子吧。也可在「设施」页查看球场与训练。";
   } else if (building) {
     upBtn.disabled = true;
     const left = Math.max(0, proj.finishDay - world.day);
-    upBtn.textContent = `鏂藉伐涓紙${left} 澶╋級`;
-    $("#youth-hint").textContent = `姝ｅ湪鍗囩骇鑷?Lv.${proj.to} ${proj.name}锛屽畬宸ュ悗鑷姩鐢熸晥銆俙;
+    upBtn.textContent = `施工中（${left} 天）`;
+    $("#youth-hint").textContent = `正在升级至 Lv.${proj.to} ${proj.name}，完工后自动生效。`;
   } else {
     upBtn.disabled = false;
-    upBtn.textContent = `鍗囩骇鑷?Lv.${nextLv}锛?{formatMoney(nextCost)} 路 鏈夊伐鏈燂級`;
-    $("#youth-hint").textContent = `涓嬬骇锛?{YOUTH_LEVELS[nextLv].name} 路 瀹归噺 ${YOUTH_LEVELS[nextLv].capacity} 路 鎴愰暱鏇村揩锛堛€岃鏂姐€嶉〉鍙竴骞剁鐞嗙悆鍦?璁粌锛塦;
+    upBtn.textContent = `升级至 Lv.${nextLv}（${formatMoney(nextCost)} · 有工期）`;
+    $("#youth-hint").textContent = `下级：${YOUTH_LEVELS[nextLv].name} · 容量 ${YOUTH_LEVELS[nextLv].capacity} · 成长更快（「设施」页可一并管理球场/训练）`;
   }
 
   $("#youth-count").textContent = t("youth.count", { n: ya.players.length });
@@ -2344,7 +2344,7 @@ function renderYouth() {
         .map((p) => {
           const pot = p.potential ?? p.ovr;
           const potClass = pot >= 16 ? "stat-high" : pot >= 13 ? "stat-mid" : "stat-low";
-          const num = p.number != null ? p.number : "鈥?;
+          const num = p.number != null ? p.number : "—";
           return `<tr>
             <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${num}</span></td>
             <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}</span></td>
@@ -2355,14 +2355,14 @@ function renderYouth() {
             <td class="${potClass}"><strong>${pot}</strong></td>
             <td>${formatMoney(p.wage)}</td>
             <td>
-              <button class="btn small" data-player-link="${p.id}">璇︽儏</button>
-              <button class="btn small primary" data-promote="${p.id}">鎻愭嫈</button>
-              <button class="btn small danger" data-release="${p.id}">閲婃斁</button>
+              <button class="btn small" data-player-link="${p.id}">详情</button>
+              <button class="btn small primary" data-promote="${p.id}">提拔</button>
+              <button class="btn small danger" data-release="${p.id}">释放</button>
             </td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="9" class="muted">鏆傛棤闈掕鐞冨憳锛屾帹杩涙棩绋嬬瓑寰呮嫑鐢?/td></tr>`;
+    : `<tr><td colspan="9" class="muted">暂无青训球员，推进日程等待招生</td></tr>`;
 
   tbody.querySelectorAll("[data-promote]").forEach((btn) => {
     btn.onclick = () => {
@@ -2376,7 +2376,7 @@ function renderYouth() {
   });
   tbody.querySelectorAll("[data-release]").forEach((btn) => {
     btn.onclick = () => {
-      if (!confirm("纭閲婃斁璇ラ潚璁悆鍛橈紵")) return;
+      if (!confirm("确认释放该青训球员？")) return;
       const res = releaseYouth(world, world.userClubId, btn.dataset.release);
       toast(res.msg);
       if (res.ok) {
@@ -2389,7 +2389,7 @@ function renderYouth() {
 
 function tacValText(key, n) {
   const lab = tacticsSliderLabel(key, n, getLang());
-  return `${n} 路 ${lab}`;
+  return `${n} · ${lab}`;
 }
 
 function renderTacPresets() {
@@ -2428,29 +2428,29 @@ function renderTacticsSummary() {
   const bits = [];
   bits.push(
     en
-      ? `<strong>${form.name}</strong>${form.desc ? ` 路 ${form.desc}` : ""}`
-      : `<strong>${form.name}</strong>${form.desc ? ` 路 ${form.desc}` : ""}`
+      ? `<strong>${form.name}</strong>${form.desc ? ` · ${form.desc}` : ""}`
+      : `<strong>${form.name}</strong>${form.desc ? ` · ${form.desc}` : ""}`
   );
   bits.push(
     en
-      ? `Attack bias ${atkBias >= 0 ? "+" : ""}${atkBias.toFixed(0)}% 路 Defend ${defBias >= 0 ? "+" : ""}${defBias.toFixed(0)}%`
-      : `杩涙敾鍊惧悜 ${atkBias >= 0 ? "+" : ""}${atkBias.toFixed(0)}% 路 闃插畧 ${defBias >= 0 ? "+" : ""}${defBias.toFixed(0)}%`
+      ? `Attack bias ${atkBias >= 0 ? "+" : ""}${atkBias.toFixed(0)}% · Defend ${defBias >= 0 ? "+" : ""}${defBias.toFixed(0)}%`
+      : `进攻倾向 ${atkBias >= 0 ? "+" : ""}${atkBias.toFixed(0)}% · 防守 ${defBias >= 0 ? "+" : ""}${defBias.toFixed(0)}%`
   );
   bits.push(
     en
-      ? `Possession weight 脳${(smod.possession || 1).toFixed(2)} 路 Fitness cost 脳${fitCost.toFixed(2)} 路 Foul risk 脳${foulRisk.toFixed(2)}`
-      : `鎺х悆鏉冮噸 脳${(smod.possession || 1).toFixed(2)} 路 浣撹兘娑堣€?脳${fitCost.toFixed(2)} 路 鐘椋庨櫓 脳${foulRisk.toFixed(2)}`
+      ? `Possession weight ×${(smod.possession || 1).toFixed(2)} · Fitness cost ×${fitCost.toFixed(2)} · Foul risk ×${foulRisk.toFixed(2)}`
+      : `控球权重 ×${(smod.possession || 1).toFixed(2)} · 体能消耗 ×${fitCost.toFixed(2)} · 犯规风险 ×${foulRisk.toFixed(2)}`
   );
   if (tac.style === "counter") {
-    bits.push(en ? "Counters attack & possession styles well." : "鍏嬪埗锛氭搮闀挎墦杩涙敾鍨?/ 鎺х悆鍨嬨€?);
+    bits.push(en ? "Counters attack & possession styles well." : "克制：擅长打进攻型 / 控球型。");
   } else if (tac.style === "attack") {
-    bits.push(en ? "Vulnerable to deep counters." : "娉ㄦ剰锛氬鏄撹浣庝綅鍙嶅嚮閽堝銆?);
+    bits.push(en ? "Vulnerable to deep counters." : "注意：容易被低位反击针对。");
   } else if (tac.style === "possession") {
-    bits.push(en ? "Holds ball; less effective vs high press counters." : "鎺х悆涓诲锛涘楂樺帇鍙嶅嚮鐣ュ悆浜忋€?);
+    bits.push(en ? "Holds ball; less effective vs high press counters." : "控球主导；对高压反击略吃亏。");
   } else if (tac.style === "defend") {
-    bits.push(en ? "Solid block; fewer chances created." : "闃插畧绋冲浐锛屽垱閫犳満浼氬亸灏戙€?);
+    bits.push(en ? "Solid block; fewer chances created." : "防守稳固，创造机会偏少。");
   }
-  // 瑙掕壊鎸囦护鎽樿
+  // 角色指令摘要
   ensureLineupRoles(club);
   const roles = tac.roles || [];
   if (roles.length) {
@@ -2462,19 +2462,19 @@ function renderTacticsSummary() {
     const top = Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([k, n]) => (n > 1 ? `${k}脳${n}` : k))
-      .join(" 路 ");
+      .map(([k, n]) => (n > 1 ? `${k}×${n}` : k))
+      .join(" · ");
     const rm = teamRoleMods(club);
     bits.push(
       en
-        ? `Roles: ${top} 路 team bias ATK脳${rm.atk.toFixed(2)} DEF脳${rm.def.toFixed(2)}`
-        : `瑙掕壊锛?{top} 路 鏁翠綋 鏀幻?{rm.atk.toFixed(2)} 闃裁?{rm.def.toFixed(2)}`
+        ? `Roles: ${top} · team bias ATK×${rm.atk.toFixed(2)} DEF×${rm.def.toFixed(2)}`
+        : `角色：${top} · 整体 攻×${rm.atk.toFixed(2)} 防×${rm.def.toFixed(2)}`
     );
   }
   el.innerHTML = bits.map((b) => `<div>${b}</div>`).join("");
 }
 
-/** 鎴樻湳鏉挎嫋鎷?/ 鐐归€夌姸鎬?*/
+/** 战术板拖拽 / 点选状态 */
 const tacPick = {
   mode: null, // 'slot' | 'bench'
   slot: null,
@@ -2539,7 +2539,7 @@ function bindTacticsDragDrop() {
   if (!pitch || pitch._tacBound) return;
   pitch._tacBound = true;
 
-  // 闃绘鍚嶇墝閾炬帴鍦ㄦ嫋鎷芥椂鎵撳紑璧勬枡
+  // 阻止名牌链接在拖拽时打开资料
   pitch.addEventListener(
     "click",
     (e) => {
@@ -2571,7 +2571,7 @@ function bindTacticsDragDrop() {
   pitch.addEventListener("dragend", (e) => {
     e.target.closest?.(".tac-slot")?.classList.remove("dragging");
     pitch.querySelectorAll(".drag-over").forEach((el) => el.classList.remove("drag-over"));
-    // 寤跺悗娓?dragging锛岄伩鍏?dragend 鍚庣珛鍒昏Е鍙?click 璇€?
+    // 延后清 dragging，避免 dragend 后立刻触发 click 误选
     setTimeout(() => {
       tacPick.dragging = false;
     }, 30);
@@ -2618,10 +2618,10 @@ function bindTacticsDragDrop() {
     tacPick.dragging = false;
   });
 
-  // 鐐瑰嚮锛氱偣閫変簰鎹?/ 鏇胯ˉ涓婂満锛堣Е灞忓弸濂斤級
+  // 点击：点选互换 / 替补上场（触屏友好）
   pitch.addEventListener("click", (e) => {
     if (tacPick.dragging) return;
-    // 鐐瑰悕鐗岄摼鎺ヤ笖鏈湪鐐归€夋祦绋?鈫?鏀捐鎵撳紑璧勬枡
+    // 点名牌链接且未在点选流程 → 放行打开资料
     if (e.target.closest("[data-player-link]") && !tacPick.mode) return;
     const slotEl = e.target.closest(".tac-slot");
     if (!slotEl || !pitch.contains(slotEl)) return;
@@ -2649,7 +2649,7 @@ function bindTacticsDragDrop() {
       else toast(res.msg || t("tac.swapFail"));
       return;
     }
-    // 寮€濮嬬偣閫夛紙绌烘Ы涔熷彲琚崲涓婏級
+    // 开始点选（空槽也可被换上）
     tacPick.mode = "slot";
     tacPick.slot = slot;
     tacPick.playerId = pid;
@@ -2688,7 +2688,7 @@ function bindTacticsDragDrop() {
         e.stopPropagation();
       }
       const pid = chip.dataset.playerId;
-      // 鑻ュ凡閫変腑棣栧彂妲?鈫?鐩存帴鎶婅鏇胯ˉ鎹笂
+      // 若已选中首发槽 → 直接把该替补换上
       if (tacPick.mode === "slot" && tacPick.slot != null) {
         const club = getUserClub(world);
         const res = setLineupSlot(club, tacPick.slot, pid);
@@ -2736,12 +2736,12 @@ function renderTactics() {
     const fm = FORMATION_MOD[tac.formation] || {};
     const en = getLang() === "en";
     formDesc.textContent = fmeta?.desc
-      ? `${fmeta.desc} 路 ${en ? "ATK" : "鏀?}脳${(fm.atk || 1).toFixed(2)} ${en ? "DEF" : "闃?}脳${(fm.def || 1).toFixed(2)} ${en ? "MID" : "涓満"}脳${(fm.midfield || 1).toFixed(2)}`
+      ? `${fmeta.desc} · ${en ? "ATK" : "攻"}×${(fm.atk || 1).toFixed(2)} ${en ? "DEF" : "防"}×${(fm.def || 1).toFixed(2)} ${en ? "MID" : "中场"}×${(fm.midfield || 1).toFixed(2)}`
       : "";
   }
 
   if (!tac.lineup?.length) autoLineup(club);
-  // 闃靛瀷妲戒綅鏁板彉鍖栨椂瀵归綈 lineup 闀垮害
+  // 阵型槽位数变化时对齐 lineup 长度
   const formation = FORMATIONS[tac.formation] || FORMATIONS["4-3-3"];
   if ((tac.lineup || []).length !== formation.slots.length) {
     autoLineup(club);
@@ -2773,17 +2773,17 @@ function renderTactics() {
         return `<option value="${rid}"${rid === roleId ? " selected" : ""}>${escapeHtml(lab || rid)}</option>`;
       });
       const roleSel = `<select class="tac-role-sel" data-slot-role="${i}" title="${escapeHtml(
-        en ? "Player role" : "瑙掕壊鎸囦护"
-      )}" aria-label="${escapeHtml(en ? "Role" : "瑙掕壊")}">${roleOpts.join("")}</select>`;
+        en ? "Player role" : "角色指令"
+      )}" aria-label="${escapeHtml(en ? "Role" : "角色")}">${roleOpts.join("")}</select>`;
       const full = p
-        ? `${shirtNo != null ? `#${shirtNo} ` : ""}${p.name} 路 ${roleLabel(roleId, en ? "en" : "zh")}`
+        ? `${shirtNo != null ? `#${shirtNo} ` : ""}${p.name} · ${roleLabel(roleId, en ? "en" : "zh")}`
         : `${POS_LABEL[slot.pos] || slot.pos}`;
       const badge =
         shirtNo != null
           ? `<span class="pitch-num" style="background:${kitBg};color:${kitNc};border-color:${kit.primary || "#fff"}">${shirtNo}</span>`
           : `<span class="pitch-slot-pos">${escapeHtml(slot.pos)}</span>`;
       const nameText = shirtNo != null ? `#${shirtNo} ${label}` : label;
-      // 鍚嶇墝锛氳祫鏂欓摼鎺ワ紱鎷栨嫿鍙ユ焺鍦ㄦ暣涓?slot
+      // 名牌：资料链接；拖拽句柄在整个 slot
       const nameHtml = p
         ? `<button type="button" class="player-link pitch-player-link" data-player-link="${escapeHtml(p.id)}">${escapeHtml(nameText)}</button>`
         : `<span class="pitch-empty">${escapeHtml(POS_LABEL[slot.pos] || slot.pos)}</span>`;
@@ -2803,7 +2803,7 @@ function renderTactics() {
     })
     .join("");
 
-  // 鏇胯ˉ甯?
+  // 替补席
   const benchEl = $("#tac-bench");
   if (benchEl) {
     const xiSet = new Set(tac.lineup || []);
@@ -2825,9 +2825,9 @@ function renderTactics() {
             const fit = Math.round(p.fitness ?? 100);
             const status =
               (p.injured || 0) > 0
-                ? `<em class="tac-chip-bad">${getLang() === "en" ? "INJ" : "浼?}</em>`
+                ? `<em class="tac-chip-bad">${getLang() === "en" ? "INJ" : "伤"}</em>`
                 : (p.suspendedMatches || 0) > 0
-                  ? `<em class="tac-chip-bad">${getLang() === "en" ? "SUS" : "鍋?}</em>`
+                  ? `<em class="tac-chip-bad">${getLang() === "en" ? "SUS" : "停"}</em>`
                   : fit < 62
                     ? `<em class="tac-chip-warn">${fit}%</em>`
                     : `<em>${p.ovr}</em>`;
@@ -2841,7 +2841,7 @@ function renderTactics() {
                 <strong>${num} ${escapeHtml(playerDisplaySurname(p.name, p.nationality))}</strong>
                 <span><i class="badge ${p.pos}">${POS_LABEL[p.pos] || p.pos}</i> ${status}</span>
               </div>
-              <button type="button" class="btn small ghost tac-chip-info" data-player-link="${escapeHtml(p.id)}" title="${escapeHtml(getLang() === "en" ? "Profile" : "璧勬枡")}">鈩?/button>
+              <button type="button" class="btn small ghost tac-chip-info" data-player-link="${escapeHtml(p.id)}" title="${escapeHtml(getLang() === "en" ? "Profile" : "资料")}">ℹ</button>
             </div>`;
           })
           .join("")
@@ -2854,7 +2854,7 @@ function renderTactics() {
   renderTacticsSummary();
 }
 
-/** 妲戒綅瑙掕壊涓嬫媺锛堟瘡娆?render 鍚庨噸缁戯級 */
+/** 槽位角色下拉（每次 render 后重绑） */
 function bindTacticsRoleSelects() {
   const pitch = $("#pitch");
   if (!pitch) return;
@@ -2892,15 +2892,15 @@ function clubLinkHtml(clubId, label, extraClass = "") {
   return `<button type="button" class="club-link ${extraClass}" data-club-link="${escapeHtml(clubId)}">${escapeHtml(name)}</button>`;
 }
 
-/** 鍙偣鍑荤悆鍛樺悕 鈫?showPlayerModal锛堝叏灞€ data-player-link 濮旀墭锛?*/
+/** 可点击球员名 → showPlayerModal（全局 data-player-link 委托） */
 function playerLinkHtml(playerId, label, extraClass = "") {
-  if (!playerId) return escapeHtml(label ?? "鈥?);
+  if (!playerId) return escapeHtml(label ?? "—");
   return `<button type="button" class="player-link ${extraClass}" data-player-link="${escapeHtml(playerId)}">${escapeHtml(label ?? "?")}</button>`;
 }
 
 function formatFormHtml(form) {
   const list = (form || []).slice(-5);
-  if (!list.length) return `<span class="muted">鈥?/span>`;
+  if (!list.length) return `<span class="muted">—</span>`;
   return `<span class="form-pills">${list
     .map((r) => {
       const cls = r === "W" ? "w" : r === "D" ? "d" : "l";
@@ -2928,7 +2928,7 @@ function renderClubs() {
   const divFilter = sel?.value || "all";
   const q = (searchEl?.value || "").trim().toLowerCase();
 
-  // 鍚勭骇绉垎姒滄帓鍚嶇紦瀛?
+  // 各级积分榜排名缓存
   const rankMap = new Map();
   for (const d of [1, 2, 3]) {
     getSortedTable(world, d).forEach((r, i) => {
@@ -2968,10 +2968,10 @@ function renderClubs() {
           return `<tr class="${me ? "me" : ""}">
             <td>
               <span class="kit-chip" style="${kitBadgeStyle(c)}"></span>
-              ${clubLinkHtml(c.id, c.name)}${me ? " 鈽? : ""}
+              ${clubLinkHtml(c.id, c.name)}${me ? " ★" : ""}
             </td>
             <td>${escapeHtml(divName)}</td>
-            <td>${info ? info.rank : "鈥?}</td>
+            <td>${info ? info.rank : "—"}</td>
             <td><strong>${info ? info.pts : 0}</strong></td>
             <td>${formatFormHtml(c.form)}</td>
             <td class="${ovrClass(avg)}">${avg}</td>
@@ -3017,7 +3017,7 @@ function showClubModal(clubId) {
     .filter((f) => f.home === club.id || f.away === club.id)
     .slice()
     .sort((a, b) => a.day - b.day);
-  // 杩戞湡宸茶禌 + 鎺ヤ笅鏉ユ湭璧?
+  // 近期已赛 + 接下来未赛
   const playedFx = fixtures.filter((f) => f.played).slice(-5).reverse();
   const upcomingFx = fixtures.filter((f) => !f.played).slice(0, 6);
 
@@ -3028,7 +3028,7 @@ function showClubModal(clubId) {
           (h) => `<div class="honor-item">
             <div class="season">${h.season}</div>
             <strong>${escapeHtml(h.title || "")}</strong>
-            ${h.detail ? ` <span class="muted">锛?{escapeHtml(h.detail)}锛?/span>` : ""}
+            ${h.detail ? ` <span class="muted">（${escapeHtml(h.detail)}）</span>` : ""}
           </div>`
         )
         .join("")}</div>`
@@ -3039,7 +3039,7 @@ function showClubModal(clubId) {
       const s = playerStats(p);
       const isGk = p.pos === "GK";
       return `<tr>
-        <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${p.number ?? "鈥?}</span></td>
+        <td class="num-cell"><span class="kit-num" style="${kitBadgeStyle(club)}">${p.number ?? "—"}</span></td>
         <td class="name-with-avatar">${playerAvatarHtml(p, club, 26)}
           ${playerLinkHtml(p.id, p.name)}
         </td>
@@ -3055,7 +3055,7 @@ function showClubModal(clubId) {
   const fxRow = (f) => {
     const home = world.clubs.find((c) => c.id === f.home);
     const away = world.clubs.find((c) => c.id === f.away);
-    const score = f.played ? `${f.homeGoals} - ${f.awayGoals}` : "鈥?;
+    const score = f.played ? `${f.homeGoals} - ${f.awayGoals}` : "—";
     const homeCls = f.home === club.id ? "me-side" : "";
     const awayCls = f.away === club.id ? "me-side" : "";
     return `<tr>
@@ -3072,18 +3072,18 @@ function showClubModal(clubId) {
       <span class="kit-chip large" style="${kitBadgeStyle(club)}"></span>
       ${renderKitShirt(club, null, 52)}
       <div>
-        <h2 style="margin:0 0 0.25rem">${escapeHtml(club.name)}${me ? " 鈽? : ""}</h2>
+        <h2 style="margin:0 0 0.25rem">${escapeHtml(club.name)}${me ? " ★" : ""}</h2>
         <p class="muted" style="margin:0">
           ${escapeHtml(divName)}
-          ${rank ? ` 路 ${t("clubs.rank", { n: rank })}` : ""}
-          路 ${t("clubs.pts", { n: row.pts || 0 })}
-          路 ${escapeHtml(t("clubs.record", { w: row.w || 0, d: row.d || 0, l: row.l || 0 }))}
+          ${rank ? ` · ${t("clubs.rank", { n: rank })}` : ""}
+          · ${t("clubs.pts", { n: row.pts || 0 })}
+          · ${escapeHtml(t("clubs.record", { w: row.w || 0, d: row.d || 0, l: row.l || 0 }))}
         </p>
         <p class="muted" style="margin:0.25rem 0 0">
           ${escapeHtml(t("clubs.money"))} ${formatMoney(club.money || 0)}
-          路 ${escapeHtml(t("clubs.squadAvg"))} <strong class="${ovrClass(avg)}">${avg}</strong>
-          路 ${escapeHtml(t("clubs.power"))} ${club.power ?? "鈥?}
-          路 ${escapeHtml(t("tac.formation"))} ${escapeHtml(formation)} 路 ${escapeHtml(styleLabel)}
+          · ${escapeHtml(t("clubs.squadAvg"))} <strong class="${ovrClass(avg)}">${avg}</strong>
+          · ${escapeHtml(t("clubs.power"))} ${club.power ?? "—"}
+          · ${escapeHtml(t("tac.formation"))} ${escapeHtml(formation)} · ${escapeHtml(styleLabel)}
         </p>
         <div style="margin-top:0.4rem">${formatFormHtml(club.form)} <span class="muted" style="font-size:0.8rem">${escapeHtml(t("clubs.formHint"))}</span></div>
       </div>
@@ -3151,7 +3151,7 @@ function showClubModal(clubId) {
 function renderTable() {
   const club = getUserClub(world);
   const sel = $("#table-division");
-  // 榛樿鏄剧ず鑷繁鎵€鍦ㄨ仈璧?
+  // 默认显示自己所在联赛
   if (sel && !sel.dataset.touched) {
     sel.value = String(club.division || 3);
   }
@@ -3169,9 +3169,9 @@ function renderTable() {
 
   $("#table-title").textContent = t("table.titleNamed", { name: t("div." + div) || info.name });
   let hint = "";
-  if (div === 1) hint = `20 鏀悆闃?路 鍚?${info.relegate} 鍚嶉檷鍏ョ敳绾ц仈璧沗;
-  else if (div === 2) hint = `20 鏀悆闃?路 鍓?${info.promote} 鍚嶅崌瓒呯骇鑱旇禌 路 鍚?${info.relegate} 鍚嶉檷涔欑骇鑱旇禌`;
-  else hint = `20 鏀悆闃?路 鍓?${info.promote} 鍚嶅崌鐢茬骇鑱旇禌`;
+  if (div === 1) hint = `20 支球队 · 后 ${info.relegate} 名降入甲级联赛`;
+  else if (div === 2) hint = `20 支球队 · 前 ${info.promote} 名升超级联赛 · 后 ${info.relegate} 名降乙级联赛`;
+  else hint = `20 支球队 · 前 ${info.promote} 名升甲级联赛`;
   $("#table-hint").textContent = hint;
 
   const tbody = $("#league-table tbody");
@@ -3183,11 +3183,11 @@ function renderTable() {
           const me = r.id === world.userClubId;
           const rank = i + 1;
           let zone = "";
-          if (upN && rank <= upN) zone = ' <span class="badge MID">鍗囩骇鍖?/span>';
-          if (downN && rank > n - downN) zone = ' <span class="badge ATT">闄嶇骇鍖?/span>';
+          if (upN && rank <= upN) zone = ' <span class="badge MID">升级区</span>';
+          if (downN && rank > n - downN) zone = ' <span class="badge ATT">降级区</span>';
           return `<tr class="${me ? "me" : ""}">
             <td>${rank}</td>
-            <td>${clubLinkHtml(r.id, r.name)}${me ? " 鈽? : ""}${zone}</td>
+            <td>${clubLinkHtml(r.id, r.name)}${me ? " ★" : ""}${zone}</td>
             <td>${r.played}</td>
             <td>${r.w}</td>
             <td>${r.d}</td>
@@ -3199,7 +3199,7 @@ function renderTable() {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="10" class="muted">璇ョ骇鍒殏鏃犵悆闃燂紙璇峰紑鏂版。浣撻獙瀹屾暣涓夌骇鑱旇禌锛?/td></tr>`;
+    : `<tr><td colspan="10" class="muted">该级别暂无球队（请开新档体验完整三级联赛）</td></tr>`;
 }
 
 function renderStats() {
@@ -3224,7 +3224,7 @@ function renderStats() {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="7" class="muted">鏆傛棤杩涚悆鏁版嵁锛岃涪瀹屾瘮璧涘悗鏇存柊</td></tr>`;
+    : `<tr><td colspan="7" class="muted">暂无进球数据，踢完比赛后更新</td></tr>`;
 
   const assistsBody = $("#stats-assists tbody");
   assistsBody.innerHTML = assists.length
@@ -3244,7 +3244,7 @@ function renderStats() {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="7" class="muted">鏆傛棤鍔╂敾鏁版嵁锛岃涪瀹屾瘮璧涘悗鏇存柊</td></tr>`;
+    : `<tr><td colspan="7" class="muted">暂无助攻数据，踢完比赛后更新</td></tr>`;
 
   const ratingsBody = $("#stats-ratings tbody");
   if (ratingsBody) {
@@ -3262,7 +3262,7 @@ function renderStats() {
           </tr>`;
           })
           .join("")
-      : `<tr><td colspan="6" class="muted">鑷冲皯 3 鍦哄嚭鍦哄悗鏄剧ず璇勫垎姒?/td></tr>`;
+      : `<tr><td colspan="6" class="muted">至少 3 场出场后显示评分榜</td></tr>`;
   }
 
   const keepersBody = $("#stats-keepers tbody");
@@ -3284,23 +3284,23 @@ function renderStats() {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="8" class="muted">鏆傛棤闂ㄥ皢鏁版嵁锛岃涪瀹屾瘮璧涘悗鏇存柊</td></tr>`;
+    : `<tr><td colspan="8" class="muted">暂无门将数据，踢完比赛后更新</td></tr>`;
 }
 
 function openBuyNegotiator(playerId, fromClubId) {
   const deal = previewBuyDeal(world, playerId, fromClubId, 3, 1.1);
   if (!deal) {
-    toast("鏃犳硶棰勮璇ヤ氦鏄?);
+    toast("无法预览该交易");
     return;
   }
   const years = prompt(
-    `${deal.player.name}\n鐞冩帰浼板€肩害 ${formatMoney(deal.price)}\n鍚堝悓骞撮檺锛?鈥?锛岄粯璁?3锛夛細`,
+    `${deal.player.name}\n球探估值约 ${formatMoney(deal.price)}\n合同年限（1–5，默认 3）：`,
     "3"
   );
   if (years == null) return;
   const y = Math.max(1, Math.min(5, parseInt(years, 10) || 3));
   const wageIn = prompt(
-    `鍛ㄨ柂鍊嶇巼锛?.95鈥?.4锛岄粯璁?1.1锛涜繃浣庡彲鑳借鎷掞級锛歕n棰勪及鍛ㄨ柂绾?${formatMoney(deal.newWage)}`,
+    `周薪倍率（0.95–1.4，默认 1.1；过低可能被拒）：\n预估周薪约 ${formatMoney(deal.newWage)}`,
     "1.1"
   );
   if (wageIn == null) return;
@@ -3308,7 +3308,7 @@ function openBuyNegotiator(playerId, fromClubId) {
   const finalDeal = previewBuyDeal(world, playerId, fromClubId, y, wm);
   if (
     !confirm(
-      `纭绛句笅 ${finalDeal.player.name}锛焅n杞細璐?${formatMoney(finalDeal.price)}\n绛剧害濂?${formatMoney(finalDeal.signingBonus)}\n${y} 骞?路 鍛ㄨ柂 ${formatMoney(finalDeal.newWage)}\n鍚堣绾?${formatMoney(finalDeal.total)}`
+      `确认签下 ${finalDeal.player.name}？\n转会费 ${formatMoney(finalDeal.price)}\n签约奖 ${formatMoney(finalDeal.signingBonus)}\n${y} 年 · 周薪 ${formatMoney(finalDeal.newWage)}\n合计约 ${formatMoney(finalDeal.total)}`
     )
   ) {
     return;
@@ -3330,14 +3330,14 @@ function renderTransfer() {
     statusEl.className = open ? "transfer-window-box open" : "transfer-window-box closed";
   }
 
-  // 鐞冩帰鍏虫敞鍒楄〃锛堟潵鑷俊绠便€屽姞鍏ュ叧娉ㄣ€嶏級
+  // 球探关注列表（来自信箱「加入关注」）
   const watchEl = $("#scout-watch-list");
   if (watchEl) {
     const en = getLang() === "en";
     const ids = world.scoutWatch || [];
     if (!ids.length) {
       watchEl.innerHTML = `<p class="muted" style="margin:0">${escapeHtml(
-        en ? "No watched players 鈥?add from Inbox scout tips." : "鏆傛棤鍏虫敞鐩爣锛堜俊绠辩悆鎺㈤偖浠跺彲娣诲姞锛?
+        en ? "No watched players — add from Inbox scout tips." : "暂无关注目标（信箱球探邮件可添加）"
       )}</p>`;
     } else {
       const rows = [];
@@ -3348,45 +3348,45 @@ function renderTransfer() {
             rows.push(
               `<div class="scout-watch-row">${playerAvatarHtml(p, c, 26)} ${playerLinkHtml(p.id, p.name)}
                 <span class="badge ${p.pos}">${POS_LABEL[p.pos] || p.pos}</span>
-                <span class="muted">${escapeHtml(c.short || c.name)} 路 ${formatScoutOvr(world, p)} 路 ${formatScoutValue(world, p)}</span>
+                <span class="muted">${escapeHtml(c.short || c.name)} · ${formatScoutOvr(world, p)} · ${formatScoutValue(world, p)}</span>
               </div>`
             );
             break;
           }
         }
       }
-      watchEl.innerHTML = rows.join("") || `<p class="muted" style="margin:0">${en ? "Watched players left clubs." : "鍏虫敞瀵硅薄宸茬闃?}</p>`;
+      watchEl.innerHTML = rows.join("") || `<p class="muted" style="margin:0">${en ? "Watched players left clubs." : "关注对象已离队"}</p>`;
     }
   }
 
   renderContractsLoansPanel();
 
-  // 鎸栬鎶ヤ环
+  // 挖角报价
   const poachEl = $("#poach-bids");
   if (poachEl) {
     const bids = pendingPoachBids(world);
     if (!bids.length) {
-      poachEl.innerHTML = `<p class="muted" style="margin:0">鏆傛棤鏉ヨ嚜鍏朵粬淇变箰閮ㄧ殑鎶ヤ环</p>`;
+      poachEl.innerHTML = `<p class="muted" style="margin:0">暂无来自其他俱乐部的报价</p>`;
     } else {
       poachEl.innerHTML = bids
         .map(
           (b) => `<div class="poach-row">
           <div>
-            <strong>${escapeHtml(b.buyerName)}</strong> 鎶ヤ环
-            <strong>${formatMoney(b.fee)}</strong> 姹傝喘
+            <strong>${escapeHtml(b.buyerName)}</strong> 报价
+            <strong>${formatMoney(b.fee)}</strong> 求购
             <strong>${playerLinkHtml(b.playerId, b.playerName)}</strong>
-            <span class="muted">锛?{b.pos} 路 ${b.ovr} 路 鍓?${Math.max(0, b.expiresDay - world.day)} 澶╋級</span>
+            <span class="muted">（${b.pos} · ${b.ovr} · 剩 ${Math.max(0, b.expiresDay - world.day)} 天）</span>
           </div>
           <div class="poach-actions">
-            <button class="btn small primary" data-poach-accept="${b.id}" ${!open ? "disabled" : ""}>鎺ュ彈</button>
-            <button class="btn small" data-poach-reject="${b.id}">鎷掔粷</button>
+            <button class="btn small primary" data-poach-accept="${b.id}" ${!open ? "disabled" : ""}>接受</button>
+            <button class="btn small" data-poach-reject="${b.id}">拒绝</button>
           </div>
         </div>`
         )
         .join("");
       poachEl.querySelectorAll("[data-poach-accept]").forEach((btn) => {
         btn.onclick = () => {
-          if (!confirm("纭鎺ュ彈鎶ヤ环骞舵斁璧扮悆鍛橈紵")) return;
+          if (!confirm("确认接受报价并放走球员？")) return;
           const res = acceptPoachBid(world, btn.dataset.poachAccept);
           toast(res.msg);
           if (res.ok) {
@@ -3427,15 +3427,15 @@ function renderTransfer() {
         <td class="${ovrClass(p.ovr)}">${ovrTxt}</td>
         <td>${p.age}</td>
         <td>${clubLinkHtml(club.id, club.short)}</td>
-        <td title="鐪熷疄韬环浠呬綔鍙傝€冨尯闂?>${valTxt}</td>
+        <td title="真实身价仅作参考区间">${valTxt}</td>
         <td class="tr-actions">
-          <button class="btn small" data-player-link="${p.id}">${en ? "Info" : "璇︽儏"}</button>
+          <button class="btn small" data-player-link="${p.id}">${en ? "Info" : "详情"}</button>
           <button class="btn small primary" data-buy="${p.id}" data-from="${club.id}" ${
             buyDisabled ? "disabled" : ""
-          }>${open ? (en ? "Buy" : "璋堝垽涔板叆") : en ? "Closed" : "绐楀叧"}</button>
+          }>${open ? (en ? "Buy" : "谈判买入") : en ? "Closed" : "窗关"}</button>
           <button class="btn small" data-loan-in="${p.id}" data-from="${club.id}" ${
             loanable ? "" : "disabled"
-          }>${open ? (en ? "Loan" : "绉熷叆") : en ? "Closed" : "绐楀叧"}</button>
+          }>${open ? (en ? "Loan" : "租入") : en ? "Closed" : "窗关"}</button>
         </td>
       </tr>`;
     })
@@ -3455,19 +3455,19 @@ function renderTransfer() {
     .map((p) => {
       const onLoan = !!p.loan;
       return `<tr>
-      <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}${onLoan ? ` <span class="badge loan">${en ? "loan" : "绉?}</span>` : ""}</span></td>
+      <td class="name-with-avatar">${playerAvatarHtml(p, club, 28)} <span>${playerLinkHtml(p.id, p.name)}${onLoan ? ` <span class="badge loan">${en ? "loan" : "租"}</span>` : ""}</span></td>
       <td>${nationLabel(p)}</td>
       <td><span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span></td>
       <td class="${ovrClass(p.ovr)}">${p.ovr}</td>
       <td>${formatMoney(p.value)}</td>
       <td class="tr-actions">
-        <button class="btn small" data-player-link="${p.id}">${en ? "Info" : "璇︽儏"}</button>
+        <button class="btn small" data-player-link="${p.id}">${en ? "Info" : "详情"}</button>
         <button class="btn small danger" data-sell="${p.id}" ${
           buyDisabled || onLoan ? "disabled" : ""
-        }>${onLoan ? (en ? "On loan" : "绉熷€熶腑") : open ? (en ? "Sell" : "鍑哄敭") : en ? "Closed" : "绐楀叧"}</button>
+        }>${onLoan ? (en ? "On loan" : "租借中") : open ? (en ? "Sell" : "出售") : en ? "Closed" : "窗关"}</button>
         <button class="btn small" data-loan-out="${p.id}" ${
           buyDisabled || onLoan ? "disabled" : ""
-        }>${open && !onLoan ? (en ? "Loan out" : "澶栫") : en ? "鈥? : "鈥?}</button>
+        }>${open && !onLoan ? (en ? "Loan out" : "外租") : en ? "—" : "—"}</button>
       </td>
     </tr>`;
     })
@@ -3475,7 +3475,7 @@ function renderTransfer() {
 
   st.querySelectorAll("[data-sell]").forEach((b) => {
     b.onclick = () => {
-      if (!confirm(en ? "Sell this player?" : "纭鍑哄敭璇ョ悆鍛橈紵")) return;
+      if (!confirm(en ? "Sell this player?" : "确认出售该球员？")) return;
       const res = sellPlayer(world, b.dataset.sell);
       toast(res.msg);
       if (res.ok) {
@@ -3489,7 +3489,7 @@ function renderTransfer() {
   });
 }
 
-/** 杞細椤碉細鍚堝悓寰呭姙 + 澶栫/绉熷叆鍒楄〃 */
+/** 转会页：合同待办 + 外租/租入列表 */
 function renderContractsLoansPanel() {
   const box = $("#contracts-loans-panel");
   if (!box || !world) return;
@@ -3511,30 +3511,30 @@ function renderContractsLoansPanel() {
           const tag = p._needsRenew
             ? en
               ? "Must renew"
-              : "寰呯画绾?
+              : "待续约"
             : en
               ? "Expiring"
-              : "灏嗗敖";
+              : "将尽";
           return `<div class="cl-row">
             <div class="cl-main">
               <strong>${playerLinkHtml(p.id, p.name)}</strong>
               <span class="badge ${p.pos}">${POS_LABEL[p.pos]}</span>
-              <span class="muted">${p.ovr} 路 ${p.contractYears ?? 0}${en ? "y" : "骞?} 路 ${formatMoney(p.wage)}</span>
+              <span class="muted">${p.ovr} · ${p.contractYears ?? 0}${en ? "y" : "年"} · ${formatMoney(p.wage)}</span>
               <span class="badge contract-short">${escapeHtml(tag)}</span>
             </div>
             <div class="cl-actions">
-              <button type="button" class="btn small primary" data-cl-renew="${p.id}">${escapeHtml(t("contract.renew") || (en ? "Renew" : "缁害"))}</button>
-              <button type="button" class="btn small danger" data-cl-term="${p.id}">${escapeHtml(t("contract.terminate") || (en ? "Release" : "瑙ｇ害"))}</button>
+              <button type="button" class="btn small primary" data-cl-renew="${p.id}">${escapeHtml(t("contract.renew") || (en ? "Renew" : "续约"))}</button>
+              <button type="button" class="btn small danger" data-cl-term="${p.id}">${escapeHtml(t("contract.terminate") || (en ? "Release" : "解约"))}</button>
             </div>
             ${
               offer
-                ? `<div class="cl-offer muted">${en ? "Offer" : "鎶ヤ环"}: ${offer.years}${en ? "y" : "骞?} 路 ${formatMoney(offer.newWage)} 路 ${en ? "bonus" : "濂?} ${formatMoney(offer.fee)}</div>`
+                ? `<div class="cl-offer muted">${en ? "Offer" : "报价"}: ${offer.years}${en ? "y" : "年"} · ${formatMoney(offer.newWage)} · ${en ? "bonus" : "奖"} ${formatMoney(offer.fee)}</div>`
                 : ""
             }
           </div>`;
         })
         .join("")
-    : `<p class="muted" style="margin:0">${en ? "No short contracts needing attention." : "鏆傛棤鐭害/寰呯画绾︾悆鍛樸€?}</p>`;
+    : `<p class="muted" style="margin:0">${en ? "No short contracts needing attention." : "暂无短约/待续约球员。"}</p>`;
 
   const outRows = out.length
     ? out
@@ -3542,15 +3542,15 @@ function renderContractsLoansPanel() {
           (l) => `<div class="cl-row">
           <div class="cl-main">
             <strong>${playerLinkHtml(l.playerId, l.playerName)}</strong>
-            <span class="muted">鈫?${escapeHtml(l.toName)} 路 ${escapeHtml(l.untilLabel)}</span>
+            <span class="muted">→ ${escapeHtml(l.toName)} · ${escapeHtml(l.untilLabel)}</span>
           </div>
           <div class="cl-actions">
-            <button type="button" class="btn small" data-cl-recall="${l.playerId}">${escapeHtml(t("contract.recall") || (en ? "Recall" : "鍙洖"))}</button>
+            <button type="button" class="btn small" data-cl-recall="${l.playerId}">${escapeHtml(t("contract.recall") || (en ? "Recall" : "召回"))}</button>
           </div>
         </div>`
         )
         .join("")
-    : `<p class="muted" style="margin:0">${en ? "No players out on loan." : "鏆傛棤澶栫鐞冨憳銆?}</p>`;
+    : `<p class="muted" style="margin:0">${en ? "No players out on loan." : "暂无外租球员。"}</p>`;
 
   const inRows = inn.length
     ? inn
@@ -3558,25 +3558,25 @@ function renderContractsLoansPanel() {
           (l) => `<div class="cl-row">
           <div class="cl-main">
             <strong>${playerLinkHtml(l.playerId, l.playerName)}</strong>
-            <span class="muted">${en ? "from" : "鏉ヨ嚜"} ${escapeHtml(l.fromName)} 路 ${escapeHtml(l.untilLabel)}</span>
+            <span class="muted">${en ? "from" : "来自"} ${escapeHtml(l.fromName)} · ${escapeHtml(l.untilLabel)}</span>
           </div>
         </div>`
         )
         .join("")
-    : `<p class="muted" style="margin:0">${en ? "No incoming loans." : "鏆傛棤绉熷叆鐞冨憳銆?}</p>`;
+    : `<p class="muted" style="margin:0">${en ? "No incoming loans." : "暂无租入球员。"}</p>`;
 
   box.innerHTML = `
     <div class="cl-section">
-      <h3>${escapeHtml(t("contract.attention") || (en ? "Contracts needing attention" : "鍚堝悓寰呭姙"))}</h3>
+      <h3>${escapeHtml(t("contract.attention") || (en ? "Contracts needing attention" : "合同待办"))}</h3>
       ${renewRows}
     </div>
     <div class="cl-section grid-2-loans">
       <div>
-        <h3>${escapeHtml(t("contract.loansOut") || (en ? "Loaned out" : "澶栫涓?))}</h3>
+        <h3>${escapeHtml(t("contract.loansOut") || (en ? "Loaned out" : "外租中"))}</h3>
         ${outRows}
       </div>
       <div>
-        <h3>${escapeHtml(t("contract.loansIn") || (en ? "Loaned in" : "绉熷叆涓?))}</h3>
+        <h3>${escapeHtml(t("contract.loansIn") || (en ? "Loaned in" : "租入中"))}</h3>
         ${inRows}
       </div>
     </div>
@@ -3593,7 +3593,7 @@ function renderContractsLoansPanel() {
   });
 }
 
-/** 璧涚▼鍞竴閿紙鏃?id 鏃剁敤锛?*/
+/** 赛程唯一键（无 id 时用） */
 function fixtureKey(f) {
   if (!f) return "";
   return `${f.home}|${f.away}|${f.day}|${f.round ?? ""}|${f.roundLabel || ""}`;
@@ -3616,15 +3616,15 @@ function renderFixtures() {
       const score = f.played ? `${f.homeGoals} - ${f.awayGoals}` : "-";
       let status = t("fix.pending");
       if (f.played) status = t("fix.played");
-      else if (f.day === world.day) status = en ? "Today" : "浠婃棩";
-      else if (f.day < world.day) status = en ? "Due" : "寰呰涪";
-      // 宸茶禌涓旀湁鎶ュ憡 鈫?鍙洖鐪?
+      else if (f.day === world.day) status = en ? "Today" : "今日";
+      else if (f.day < world.day) status = en ? "Due" : "待踢";
+      // 已赛且有报告 → 可回看
       let action = status;
       if (f.played && f.matchReport) {
-        action = `<button type="button" class="btn tiny fix-report-btn" data-fixture-key="${escapeHtml(fixtureKey(f))}" title="${escapeHtml(t("fix.viewReport") || "鎴樻姤")}">${escapeHtml(t("fix.viewReport") || (en ? "Report" : "鎴樻姤"))}</button>`;
+        action = `<button type="button" class="btn tiny fix-report-btn" data-fixture-key="${escapeHtml(fixtureKey(f))}" title="${escapeHtml(t("fix.viewReport") || "战报")}">${escapeHtml(t("fix.viewReport") || (en ? "Report" : "战报"))}</button>`;
       } else if (f.played && f.events?.length) {
-        // 鏃ф。鏃犲畬鏁?report锛氬敖閲忕敤浜嬩欢鎷肩畝鏄撴姤鍛婂叆鍙?
-        action = `<button type="button" class="btn tiny fix-report-btn" data-fixture-key="${escapeHtml(fixtureKey(f))}" title="${escapeHtml(t("fix.viewReport") || "鎴樻姤")}">${escapeHtml(t("fix.viewReport") || (en ? "Report" : "鎴樻姤"))}</button>`;
+        // 旧档无完整 report：尽量用事件拼简易报告入口
+        action = `<button type="button" class="btn tiny fix-report-btn" data-fixture-key="${escapeHtml(fixtureKey(f))}" title="${escapeHtml(t("fix.viewReport") || "战报")}">${escapeHtml(t("fix.viewReport") || (en ? "Report" : "战报"))}</button>`;
       }
       return `<tr class="${f.day === world.day && !f.played ? "me" : ""} ${f.played ? "played" : ""}">
         <td>${f.round}</td>
@@ -3639,21 +3639,21 @@ function renderFixtures() {
 }
 
 /**
- * 浠庤禌绋嬫墦寮€鏃ф垬鎶ワ紙鍙鍥為【锛屼笉閲嶆柊妯℃嫙锛?
+ * 从赛程打开旧战报（只读回顾，不重新模拟）
  */
 function openPastMatchReport(key) {
   const fixture = findFixtureByKey(key);
   if (!fixture || !fixture.played) {
-    toast(getLang() === "en" ? "No match report" : "鏆傛棤鎴樻姤");
+    toast(getLang() === "en" ? "No match report" : "暂无战报");
     return;
   }
-  // 鏃ф。鍙兘鍙湁 events 鏃犳瘮鍒嗘姤鍛?
+  // 旧档可能只有 events 无比分报告
   let report = fixture.matchReport;
   if (!report) {
     report = buildLegacyReportFromFixture(fixture);
   }
   if (!report) {
-    toast(getLang() === "en" ? "Report not saved for this match" : "鏈満鏈繚瀛樺畬鏁存垬鎶ワ紙鏃у瓨妗ｏ級");
+    toast(getLang() === "en" ? "Report not saved for this match" : "本场未保存完整战报（旧存档）");
     return;
   }
 
@@ -3674,9 +3674,9 @@ function openPastMatchReport(key) {
   resetMatchPlayback({ keepStepMode: true });
   matchPlayback.reviewMode = true;
 
-  // 浠?events 閲嶅缓杩涚悆鍥炵湅鍒楄〃
+  // 从 events 重建进球回看列表
   rebuildGoalReplaysFromFixture(fixture);
-  // 浜嬩欢娴佹憳瑕?
+  // 事件流摘要
   for (const ev of fixture.events || []) {
     if (ev.type === "tick" || !ev.text) continue;
     if (ev.type === "goal") {
@@ -3695,7 +3695,7 @@ function openPastMatchReport(key) {
   ensureMatchPitch(true);
   if (matchView) {
     matchView.phase = "pause";
-    matchView.setBanner(getLang() === "en" ? "FULL-TIME" : "瀹屽満鍥為【", "info");
+    matchView.setBanner(getLang() === "en" ? "FULL-TIME" : "完场回顾", "info");
     matchView._syncClickable?.();
   }
 
@@ -3710,14 +3710,14 @@ function openPastMatchReport(key) {
   if (inst) inst.disabled = true;
   $("#btn-match-continue").disabled = false;
   $("#btn-match-continue").textContent =
-    t("match.backToClub") || (getLang() === "en" ? "Back" : "杩斿洖淇变箰閮?);
+    t("match.backToClub") || (getLang() === "en" ? "Back" : "返回俱乐部");
   matchPlayback.controlsEnabled = false;
   updateMatchPlaybackUI();
   showScreen("match");
-  toast(getLang() === "en" ? "Match report" : "璧涘悗鎴樻姤");
+  toast(getLang() === "en" ? "Match report" : "赛后战报");
 }
 
-/** 鏃ф。鏃?matchReport 鏃朵粠 events 鎷肩畝鏄撴姤鍛?*/
+/** 旧档无 matchReport 时从 events 拼简易报告 */
 function buildLegacyReportFromFixture(f) {
   if (!f?.played) return null;
   const home = world.clubs.find((c) => c.id === f.home);
@@ -3740,19 +3740,19 @@ function buildLegacyReportFromFixture(f) {
     narrative.push(
       getLang() === "en"
         ? `${scorers.length} goal(s) in this match.`
-        : `鏈満鍏?${scorers.length} 绮掕繘鐞冦€俙
+        : `本场共 ${scorers.length} 粒进球。`
     );
   }
   narrative.push(
     getLang() === "en"
       ? "Detailed xG/ratings unavailable for older saves."
-      : "鏃у瓨妗ｆ湭淇濆瓨瀹屾暣 xG/璇勫垎锛屼粎鏄剧ず姣斿垎涓庝簨浠躲€?
+      : "旧存档未保存完整 xG/评分，仅显示比分与事件。"
   );
   return {
     score: `${f.homeGoals ?? 0} - ${f.awayGoals ?? 0}`,
     homeGoals: f.homeGoals ?? 0,
     awayGoals: f.awayGoals ?? 0,
-    weather: f.weather ? { key: f.weather, name: f.weather, icon: "鈿? } : null,
+    weather: f.weather ? { key: f.weather, name: f.weather, icon: "⚽" } : null,
     derby: !!f.derby,
     bigMatch: false,
     home: {
@@ -3808,7 +3808,7 @@ function rebuildGoalReplaysFromFixture(fixture) {
 // ---------- Day / Match ----------
 function onAdvance() {
   if (world.sacked) {
-    handleSacked({ sacked: true, msg: world.sackedReason || "浣犲凡琚В闆? });
+    handleSacked({ sacked: true, msg: world.sackedReason || "你已被解雇" });
     return;
   }
   if (world.seasonOver || (world.fixtures.length && world.fixtures.every((f) => f.played))) {
@@ -3825,8 +3825,8 @@ function onAdvance() {
   const { userMatches } = res;
   if (userMatches && userMatches.length) {
     pendingMatch = userMatches[0];
-    const label = pendingMatch.roundLabel || `绗?${pendingMatch.round} 杞甡;
-    toast(`${label} 路 姣旇禌鏃ュ埌浜嗭紒`);
+    const label = pendingMatch.roundLabel || `第 ${pendingMatch.round} 轮`;
+    toast(`${label} · 比赛日到了！`);
   } else if (world.seasonOver) {
     toast(t("toast.seasonEndNews"));
     if (world.sacked) handleSacked({ sacked: true, msg: world.sackedReason });
@@ -3838,7 +3838,7 @@ function onAdvance() {
         toast(
           getLang() === "en"
             ? `Inbox: ${n} pending (${urgent.length} urgent)`
-            : `淇＄鏈?${n} 灏佸緟鍔烇紙鍚?${urgent.length} 灏佺揣鎬ワ級`
+            : `信箱有 ${n} 封待办（含 ${urgent.length} 封紧急）`
         );
       }
     }
@@ -3849,7 +3849,7 @@ function onAdvance() {
 
 function onAdvanceToMatchday() {
   if (world.sacked) {
-    handleSacked({ sacked: true, msg: world.sackedReason || "浣犲凡琚В闆? });
+    handleSacked({ sacked: true, msg: world.sackedReason || "你已被解雇" });
     return;
   }
   if (world.seasonOver || (world.fixtures.length && world.fixtures.every((f) => f.played))) {
@@ -3862,27 +3862,27 @@ function onAdvanceToMatchday() {
     return;
   }
   if (!res.ok && !res.days) {
-    toast(res.msg || "鏃犳硶鎺ㄨ繘");
+    toast(res.msg || "无法推进");
     return;
   }
   if (res.userMatches && res.userMatches.length) {
     pendingMatch = res.userMatches[0];
-    const label = pendingMatch.roundLabel || `绗?${pendingMatch.round} 杞甡;
-    toast(`鎺ㄨ繘 ${res.days} 澶?路 ${label}`);
+    const label = pendingMatch.roundLabel || `第 ${pendingMatch.round} 轮`;
+    toast(`推进 ${res.days} 天 · ${label}`);
   } else if (world.seasonOver) {
-    toast(`鎺ㄨ繘 ${res.days} 澶?路 璧涘缁撴潫`);
+    toast(`推进 ${res.days} 天 · 赛季结束`);
     if (world.sacked) handleSacked({ sacked: true, msg: world.sackedReason });
   } else {
-    toast(res.msg || `鎺ㄨ繘 ${res.days} 澶ー);
+    toast(res.msg || `推进 ${res.days} 天`);
   }
   autosave("advance-matchday");
   refreshAll();
 }
 
-/** 鎺ㄨ繘鍒拌禌瀛ｆ湯锛氶亣鎴戞柟姣旇禌鍋滀笅锛堟棤銆岃繛鎺?N 澶┿€嶏級 */
+/** 推进到赛季末：遇我方比赛停下（无「连推 N 天」） */
 function onAdvanceToSeasonEnd() {
   if (world.sacked) {
-    handleSacked({ sacked: true, msg: world.sackedReason || "浣犲凡琚В闆? });
+    handleSacked({ sacked: true, msg: world.sackedReason || "你已被解雇" });
     return;
   }
   if (world.seasonOver || (world.fixtures.length && world.fixtures.every((f) => f.played))) {
@@ -3891,7 +3891,7 @@ function onAdvanceToSeasonEnd() {
   }
   if (
     !confirm(
-      "灏嗚嚜鍔ㄦ帹杩涙棩绋嬶紝鐩村埌璧涘缁撴潫锛涢€斾腑閬囧埌鎴戞柟姣旇禌浼氬仠涓嬨€俓n锛堜笉浼氳烦杩囦綘鐨勬瘮璧涳級\n纭畾锛?
+      "将自动推进日程，直到赛季结束；途中遇到我方比赛会停下。\n（不会跳过你的比赛）\n确定？"
     )
   ) {
     return;
@@ -3902,20 +3902,20 @@ function onAdvanceToSeasonEnd() {
     return;
   }
   if (!res.ok && !res.days) {
-    toast(res.msg || "鏃犳硶鎺ㄨ繘");
+    toast(res.msg || "无法推进");
     if (res.userMatches?.length) pendingMatch = res.userMatches[0];
     refreshAll();
     return;
   }
   if (res.userMatches && res.userMatches.length) {
     pendingMatch = res.userMatches[0];
-    const label = pendingMatch.roundLabel || `绗?${pendingMatch.round} 杞甡;
-    toast(`${res.msg || `鎺ㄨ繘 ${res.days} 澶ー} 路 ${label}`);
+    const label = pendingMatch.roundLabel || `第 ${pendingMatch.round} 轮`;
+    toast(`${res.msg || `推进 ${res.days} 天`} · ${label}`);
   } else if (world.seasonOver) {
-    toast(res.msg || `鎺ㄨ繘 ${res.days} 澶?路 璧涘缁撴潫`);
+    toast(res.msg || `推进 ${res.days} 天 · 赛季结束`);
     if (world.sacked) handleSacked({ sacked: true, msg: world.sackedReason });
   } else {
-    toast(res.msg || `鎺ㄨ繘 ${res.days} 澶ー);
+    toast(res.msg || `推进 ${res.days} 天`);
   }
   autosave("advance-season-end");
   refreshAll();
@@ -3929,22 +3929,22 @@ function syncMatchSpeedUI() {
 }
 
 /**
- * 鐩存挱/蹇€熸ā鎷熶簨浠跺仠椤匡紙姣锛屽啀闄や互鍊嶉€燂級
- * 脳1 鈮?FMM銆屾甯歌璧涖€嶏細绌哄垎閽熶篃鏈夎妭濂忥紝鍏抽敭鎴忔洿闀?
+ * 直播/快速模拟事件停顿（毫秒，再除以倍速）
+ * ×1 ≈ FMM「正常观赛」：空分钟也有节奏，关键戏更长
  */
 function matchEventWaitMs(ev) {
   if (!ev) return 420;
   switch (ev.type) {
     case "goal":
-      return 0; // 杩涚悆璧伴珮鍏夊洖鏀撅紝鍗曠嫭璁℃椂
+      return 0; // 进球走高光回放，单独计时
     case "tick":
-      // 姣忎竴姣旇禌鍒嗛挓鐨勩€屽懠鍚搞€嶁€斺€斾箣鍓嶅嚑涔庝负 0锛屾墍浠ユ暣浣撻蹇?
+      // 每一比赛分钟的「呼吸」——之前几乎为 0，所以整体飞快
       return 280;
     case "chance":
     case "woodwork":
     case "penalty":
     case "pen_miss":
-      // 棰勬紨宸插崰 ~1.2s锛岃繖閲屽彧鐣欏皠闂ㄧ粨鏋滃仠鐣?
+      // 预演已占 ~1.2s，这里只留射门结果停留
       return 900;
     case "save":
       return 800;
@@ -3957,7 +3957,7 @@ function matchEventWaitMs(ev) {
     case "tactics":
       return 800;
     case "corner":
-      // 棰勬紨宸茬粍缁囷紝瑙掔悆缁撴灉绋嶇煭
+      // 预演已组织，角球结果稍短
       return 550;
     case "kickoff":
       return 1100;
@@ -3973,9 +3973,9 @@ function matchEventWaitMs(ev) {
 }
 
 /**
- * 椹卞姩鐞冨満鐢婚潰 + 鎸夊€嶉€熺瓑寰咃紙杩涚悆鑷姩楂樺厜鍥炴斁锛?
- * 鏀寔鏆傚仠 / 閫愪簨浠讹紱杩涚悆浼氬啓鍏ュ彲鍥炵湅鍒楄〃
- * @param {boolean} live 鏄惁鍐欒瘎璁?鏇存柊姣斿垎鏉★紙鐩存挱锛?
+ * 驱动球场画面 + 按倍速等待（进球自动高光回放）
+ * 支持暂停 / 逐事件；进球会写入可回看列表
+ * @param {boolean} live 是否写评论/更新比分条（直播）
  */
 async function driveMatchEvent(ev, snap, { live = true } = {}) {
   const spd = Math.max(0.25, Number(matchSpeed) || 1);
@@ -3983,10 +3983,10 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
 
   if (ev.type === "tick") {
     if (live && snap) setMatchMinute(snap.minute);
-    // 瀵兼紨 tick锛氱敤 snap 鎺х悆鍋忕疆鎺ㄨ繛缁〃婕旓紙涓嶆敼姣斿垎锛?
+    // 导演 tick：用 snap 控球偏置推连续表演（不改比分）
     if (matchView?.onTick) matchView.onTick(snap);
-    // 绌哄垎閽熶篃瑕佸仠锛氬惁鍒?90 鍒嗛挓鍑犱箮鐬棿璺冲畬
-    // 鏀诲娍娈佃惤涓暐鎷夐暱鍛煎惛锛屾洿鍍忋€岃繖涓€娉€?
+    // 空分钟也要停：否则 90 分钟几乎瞬间跳完
+    // 攻势段落中略拉长呼吸，更像「这一波」
     let tickMs = matchEventWaitMs(ev);
     if (matchView?._attackPhaseActive?.()) tickMs = Math.round(tickMs * 1.25);
     const wait = live ? tickMs / spd : Math.max(12, tickMs / (spd * 8));
@@ -3995,7 +3995,7 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
   }
 
   if (ev.type === "goal") {
-    // 鍏堟姄鍦洪潰锛屽啀瀵归綈/楂樺厜鈥斺€斿洖鐪嬫墠鑳戒粠鍚屼竴甯ф帴
+    // 先抓场面，再对齐/高光——回看才能从同一帧接
     const scene = matchView?.captureSceneSnapshot?.() || null;
     rememberGoalReplay(ev, snap, fixture, scene);
     if (live) {
@@ -4006,7 +4006,7 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
       }
     }
     if (matchView?.extendAttackFromEvent) matchView.extendAttackFromEvent(ev, fixture);
-    // 楂樺厜鍓嶈交瀵归綈鎺х悆锛堝畬鏁寸粍缁囧湪 playGoalHighlight 鍐咃級
+    // 高光前轻对齐控球（完整组织在 playGoalHighlight 内）
     if (matchView?.prepareEvent) {
       await matchView.prepareEvent(ev, snap, fixture, {
         speed: spd,
@@ -4015,13 +4015,13 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
       });
     }
     if (matchView?.playGoalHighlight) {
-      // 杩涚悆楂樺厜锛毭? 鏃朵笉鍔犻€燂紱蹇繘妗ｆ墠鐣ュ帇缂?
+      // 进球高光：×1 时不加速；快进档才略压缩
       const goalSpd = Math.min(spd, live ? 1.15 : 1.5);
       await matchView.playGoalHighlight(ev, snap, fixture, {
         speed: goalSpd,
         lang: getLang(),
         sleepFn: sleepPlayback,
-        // 鐩存挱锛氱敤鎶撳彇鐨勫満闈綔鍙傝€冿紙楂樺厜鍐呬粛浠庡綋鍓嶅抚鎺ㄨ繘锛?
+        // 直播：用抓取的场面作参考（高光内仍从当前帧推进）
         scene: scene || null,
         rewatch: false,
       });
@@ -4029,7 +4029,7 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
     return;
   }
 
-  // 鍏抽敭浜嬩欢寤堕暱鏀诲娍 + 棰勬紨
+  // 关键事件延长攻势 + 预演
   if (matchView?.extendAttackFromEvent) matchView.extendAttackFromEvent(ev, fixture);
   if (matchView?.prepareEvent) {
     await matchView.prepareEvent(ev, snap, fixture, {
@@ -4049,7 +4049,7 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
     }
     if (ev.type === "context") {
       const ctx = $("#match-context");
-      if (ctx) ctx.textContent = (ev.text || "").replace(/^鎯呭锛?, "");
+      if (ctx) ctx.textContent = (ev.text || "").replace(/^情境：/, "");
     }
     if (ev.type === "ht") setMatchLiveState("ht");
     if (ev.type === "ft") setMatchLiveState("ft");
@@ -4057,14 +4057,14 @@ async function driveMatchEvent(ev, snap, { live = true } = {}) {
 
   const base = matchEventWaitMs(ev);
   if (base > 0) {
-    // 蹇€熸ā鎷熶粛鍙鐢婚潰锛屼絾鏄庢樉蹇簬鐩存挱
+    // 快速模拟仍可见画面，但明显快于直播
     const wait = live ? base / spd : base / (spd * 2.2);
     await sleepPlayback(Math.max(50, wait));
   }
 }
 
 /**
- * 閿佸畾澶╂皵 + 寰锋瘮/鐒︾偣锛岀敓鎴愬畬鏁磋禌鍓嶇畝鎶?
+ * 锁定天气 + 德比/焦点，生成完整赛前简报
  */
 function buildBriefingForFixture(fixture, userClub) {
   if (!fixture || !userClub || !world) return null;
@@ -4088,7 +4088,7 @@ function buildBriefingForFixture(fixture, userClub) {
 }
 
 /**
- * 璧涘墠绠€鎶?HTML锛堟瑙?compact / 姣旇禌椤?full锛?
+ * 赛前简报 HTML（概览 compact / 比赛页 full）
  * @param {object} brief
  * @param {{ compact?: boolean }} [opts]
  */
@@ -4100,105 +4100,105 @@ function renderPrematchBriefHtml(brief, opts = {}) {
   const opp = brief.opp || {};
   const wx = brief.weather;
   const formPill = (str, tone) => {
-    const s = str && str !== "鈥? ? str : en ? "n/a" : "鏆傛棤";
+    const s = str && str !== "—" ? str : en ? "n/a" : "暂无";
     return `<span class="form-pill tone-${tone || "neutral"}">${escapeHtml(s)}</span>`;
   };
   const chips = [];
   if (wx) chips.push(`<span class="brief-chip weather">${escapeHtml(wx.icon + " " + wx.name)}</span>`);
-  if (brief.derby) chips.push(`<span class="brief-chip hot">${en ? "馃敟 Derby" : "馃敟 寰锋瘮"}</span>`);
+  if (brief.derby) chips.push(`<span class="brief-chip hot">${en ? "🔥 Derby" : "🔥 德比"}</span>`);
   if (brief.bigMatch) {
     chips.push(
-      `<span class="brief-chip hot">${brief.isCup ? (en ? "馃弳 Cup spotlight" : "馃弳 鐒︾偣鏉禌") : en ? "猸?Big match" : "猸?鐒︾偣鎴?}</span>`
+      `<span class="brief-chip hot">${brief.isCup ? (en ? "🏆 Cup spotlight" : "🏆 焦点杯赛") : en ? "⭐ Big match" : "⭐ 焦点战"}</span>`
     );
   }
   if (brief.matchup === "favorite")
-    chips.push(`<span class="brief-chip good">${en ? "Favourites" : "绾搁潰鍗犱紭"}</span>`);
+    chips.push(`<span class="brief-chip good">${en ? "Favourites" : "纸面占优"}</span>`);
   else if (brief.matchup === "underdog")
-    chips.push(`<span class="brief-chip warn">${en ? "Underdogs" : "瀹炲姏鍋忓急"}</span>`);
+    chips.push(`<span class="brief-chip warn">${en ? "Underdogs" : "实力偏弱"}</span>`);
   if (brief.boardLabel)
     chips.push(
-      `<span class="brief-chip board">${en ? "Board" : "钁ｄ簨浼?}: ${escapeHtml(brief.boardLabel)}</span>`
+      `<span class="brief-chip board">${en ? "Board" : "董事会"}: ${escapeHtml(brief.boardLabel)}</span>`
     );
 
   const rows = [];
   if (!brief.isCup && (me.pos || opp.pos)) {
     rows.push(
       en
-        ? `Table: us #${me.pos || "鈥?} (${me.pts}pts) 路 them #${opp.pos || "鈥?} (${opp.pts}pts)`
-        : `绉垎姒滐細鎴?绗?{me.pos || "鈥?}锛?{me.pts}鍒嗭級 路 瀵规柟 绗?{opp.pos || "鈥?}锛?{opp.pts}鍒嗭級`
+        ? `Table: us #${me.pos || "—"} (${me.pts}pts) · them #${opp.pos || "—"} (${opp.pts}pts)`
+        : `积分榜：我 第${me.pos || "—"}（${me.pts}分） · 对方 第${opp.pos || "—"}（${opp.pts}分）`
     );
   }
   rows.push(
-    `${en ? "Form" : "杩戝喌"}: ${en ? "Us" : "鎴?} ${me.formStr || "鈥?} 路 ${en ? "Them" : "瀵规柟"} ${opp.formStr || "鈥?}`
+    `${en ? "Form" : "近况"}: ${en ? "Us" : "我"} ${me.formStr || "—"} · ${en ? "Them" : "对方"} ${opp.formStr || "—"}`
   );
   if (me.avgFit != null) {
     rows.push(
       en
-        ? `XI fitness avg ${me.avgFit}% 路 ${me.formation}`
-        : `棣栧彂浣撹兘鍧?${me.avgFit}% 路 闃靛瀷 ${me.formation}`
+        ? `XI fitness avg ${me.avgFit}% · ${me.formation}`
+        : `首发体能均 ${me.avgFit}% · 阵型 ${me.formation}`
     );
   }
   if (brief.suspended?.length) {
     rows.push(
-      `${en ? "Suspended" : "鍋滆禌"}: ${brief.suspended.map((s) => `${s.name}(${s.matches})`).join(en ? ", " : "銆?)}`
+      `${en ? "Suspended" : "停赛"}: ${brief.suspended.map((s) => `${s.name}(${s.matches})`).join(en ? ", " : "、")}`
     );
   }
   if (brief.injured?.length) {
     rows.push(
-      `${en ? "Injured" : "浼ょ梾"}: ${brief.injured
+      `${en ? "Injured" : "伤病"}: ${brief.injured
         .slice(0, compact ? 3 : 5)
         .map((s) => s.name)
-        .join(en ? ", " : "銆?)}`
+        .join(en ? ", " : "、")}`
     );
   }
   if (brief.yellowRisk?.length) {
     rows.push(
-      `${en ? "Card risk" : "榛勭墝杈圭紭"}: ${brief.yellowRisk.map((s) => `${s.name}(${s.yellows})`).join(en ? ", " : "銆?)}`
+      `${en ? "Card risk" : "黄牌边缘"}: ${brief.yellowRisk.map((s) => `${s.name}(${s.yellows})`).join(en ? ", " : "、")}`
     );
   }
   if (brief.tired?.length) {
     rows.push(
-      `${en ? "Low fitness" : "浣撹兘鍛婃€?}: ${brief.tired.map((s) => `${s.name}${s.fit}%`).join(en ? ", " : "銆?)}`
+      `${en ? "Low fitness" : "体能告急"}: ${brief.tired.map((s) => `${s.name}${s.fit}%`).join(en ? ", " : "、")}`
     );
   }
-  // 濞佽儊鐞冨憳锛氫紭鍏堢敤鐞冩帰鎶ュ憡锛堝甫妯＄硦鑳藉姏锛夛紝鍚﹀垯鍥為€€绮剧‘ ovr
+  // 威胁球员：优先用球探报告（带模糊能力），否则回退精确 ovr
   if (brief.oppReport?.danger?.length) {
     rows.push(
-      `${en ? "Threats" : "瀵规柟濞佽儊"}: ${brief.oppReport.danger
+      `${en ? "Threats" : "对方威胁"}: ${brief.oppReport.danger
         .map((s) => `${s.name}(${s.ovrText})`)
-        .join(en ? ", " : "銆?)}`
+        .join(en ? ", " : "、")}`
     );
   } else if (opp.top?.length) {
     rows.push(
-      `${en ? "Threats" : "瀵规柟濞佽儊"}: ${opp.top.map((s) => `${s.name}(${s.ovr})`).join(en ? ", " : "銆?)}`
+      `${en ? "Threats" : "对方威胁"}: ${opp.top.map((s) => `${s.name}(${s.ovr})`).join(en ? ", " : "、")}`
     );
   }
   if (!brief.oppReport && !compact && opp.formation) {
     rows.push(
       en
-        ? `Opp setup: ${opp.formation} 路 power ${opp.power}`
-        : `瀵规柟閮ㄧ讲锛?{opp.formation} 路 瀹炲姏 ${opp.power}`
+        ? `Opp setup: ${opp.formation} · power ${opp.power}`
+        : `对方部署：${opp.formation} · 实力 ${opp.power}`
     );
   }
   if (brief.h2h?.length) {
     const h = brief.h2h
       .slice(0, 3)
       .map((x) => `${x.venue} ${x.score}`)
-      .join(" 路 ");
-    rows.push(`${en ? "H2H" : "浜ら攱"}: ${h}`);
+      .join(" · ");
+    rows.push(`${en ? "H2H" : "交锋"}: ${h}`);
   } else if (!compact) {
-    rows.push(en ? "H2H: first meeting this season" : "浜ら攱锛氭湰瀛ｉ娆′氦鎵?);
+    rows.push(en ? "H2H: first meeting this season" : "交锋：本季首次交手");
   }
 
   if (!rows.length) {
-    rows.push(en ? "Squad available 鈥?no major absences" : "浜哄憳榻愬叏锛屾棤閲嶅ぇ缂洪樀");
+    rows.push(en ? "Squad available — no major absences" : "人员齐全，无重大缺阵");
   }
 
   const head = compact
     ? ""
     : `<div class="brief-head">
-        <strong>${escapeHtml(t("match.briefing") || (en ? "Pre-match briefing" : "璧涘墠绠€鎶?))}</strong>
-        <span class="muted">${escapeHtml(brief.roundLabel || "")} 路 ${brief.isHome ? (en ? "Home" : "涓诲満") : en ? "Away" : "瀹㈠満"}</span>
+        <strong>${escapeHtml(t("match.briefing") || (en ? "Pre-match briefing" : "赛前简报"))}</strong>
+        <span class="muted">${escapeHtml(brief.roundLabel || "")} · ${brief.isHome ? (en ? "Home" : "主场") : en ? "Away" : "客场"}</span>
       </div>`;
 
   const formRow =
@@ -4218,13 +4218,13 @@ function renderPrematchBriefHtml(brief, opts = {}) {
     ${head}
     ${chips.length ? `<div class="brief-chips">${chips.join("")}</div>` : ""}
     ${formRow}
-    ${rows.map((b) => `<div class="brief-line">鈥?${escapeHtml(b)}</div>`).join("")}
+    ${rows.map((b) => `<div class="brief-line">• ${escapeHtml(b)}</div>`).join("")}
     ${oppHtml}
   </div>`;
 }
 
 /**
- * 闃熷唴璁茶瘽閫夐」 UI
+ * 队内讲话选项 UI
  * @param {"pre"|"ht"} phase
  * @param {string} selectedId
  * @param {string} [nameAttr]
@@ -4235,18 +4235,18 @@ function renderTeamTalkPicker(phase, selectedId, nameAttr = "team-talk") {
     phase === "ht"
       ? en
         ? "Team talk"
-        : "闃熷唴璁茶瘽"
+        : "队内讲话"
       : en
         ? "Pre-match team talk"
-        : "璧涘墠闃熷唴璁茶瘽";
+        : "赛前队内讲话";
   const hint =
     phase === "ht"
       ? en
-        ? "Sets the tone for the second half 路 morale + match modifiers"
-        : "瀹氳皟涓嬪崐鍦?路 褰卞搷澹皵涓庢敾闃蹭慨姝?
+        ? "Sets the tone for the second half · morale + match modifiers"
+        : "定调下半场 · 影响士气与攻防修正"
       : en
-        ? "Pick one before kick-off 路 morale + first-half modifiers 路 media quote"
-        : "寮€璧涘墠閫変竴鍙?路 褰卞搷澹皵涓庝笂鍗婂満 路 濯掍綋浼氬紩鐢?;
+        ? "Pick one before kick-off · morale + first-half modifiers · media quote"
+        : "开赛前选一句 · 影响士气与上半场 · 媒体会引用";
   const cards = TEAM_TALK_IDS.map((id) => {
     const talk = TEAM_TALKS[id];
     if (!talk || !talk.phases.includes(phase)) return "";
@@ -4313,7 +4313,7 @@ function openMatch() {
   $("#match-log").innerHTML = "";
   resetMatchPlayback({ keepStepMode: true });
 
-  // 璧涘墠绠€鎶?+ 闃熷唴璁茶瘽锛氬崱鐗?+ 璇勮娴侊紙澶╂皵涓庡紑璧涢攣瀹氫竴鑷达級
+  // 赛前简报 + 队内讲话：卡片 + 评论流（天气与开赛锁定一致）
   selectedPreTalk = "encourage";
   const brief = buildBriefingForFixture(next, user);
   const panel = $("#match-pre-brief");
@@ -4337,21 +4337,21 @@ function openMatch() {
         appendMatchEvent({ type: "briefing", text, minute: 0 });
       }
     }
-    // 璁″垎鏉挎儏澧冩潯
+    // 计分板情境条
     const ctx = $("#match-context");
     if (ctx && brief.weather) {
       const bits = [`${brief.weather.icon} ${brief.weather.name}`];
-      if (brief.derby) bits.push(getLang() === "en" ? "Derby" : "寰锋瘮");
-      if (brief.bigMatch) bits.push(getLang() === "en" ? "Spotlight" : "鐒︾偣");
+      if (brief.derby) bits.push(getLang() === "en" ? "Derby" : "德比");
+      if (brief.bigMatch) bits.push(getLang() === "en" ? "Spotlight" : "焦点");
       bits.push(brief.roundLabel || "");
-      ctx.textContent = bits.filter(Boolean).join(" 路 ");
+      ctx.textContent = bits.filter(Boolean).join(" · ");
     }
   }
 
   hideHtPanel();
   hideMatchReport();
   syncMatchSpeedUI();
-  // 2D 鐞冨満锛氳禌鍓嶇珯浣嶏紙鍙偣鐞冨憳锛?
+  // 2D 球场：赛前站位（可点球员）
   ensureMatchPitch(true);
   $("#btn-sim-fast").disabled = false;
   $("#btn-sim-live").disabled = false;
@@ -4366,7 +4366,7 @@ function openMatch() {
   showScreen("match");
 }
 
-/** 寮€璧涘悗鏀惰捣璧涘墠绠€鎶ュ崱鐗囷紙璇勮娴佷粛淇濈暀锛?*/
+/** 开赛后收起赛前简报卡片（评论流仍保留） */
 function hidePrematchBriefPanel() {
   const panel = $("#match-pre-brief");
   if (panel) {
@@ -4374,7 +4374,7 @@ function hidePrematchBriefPanel() {
   }
 }
 
-/** FM 椋庢牸璁″垎鏉匡細闃熷悕銆佺悆琛ｈ壊銆佽禌浜?*/
+/** FM 风格计分板：队名、球衣色、赛事 */
 function setupMatchScoreboard(home, away, fixture) {
   ensureKit(home);
   ensureKit(away);
@@ -4395,7 +4395,7 @@ function setupMatchScoreboard(home, away, fixture) {
   if (hk) hk.style.background = kitBackground(ensureKit(home));
   if (ak) {
     const kit = ensureKit(away);
-    // 閬垮厤涓庝富闃熸挒鑹诧細浼樺厛鍓壊
+    // 避免与主队撞色：优先副色
     ak.style.background = kitBackground({
       ...kit,
       primary: kit.secondary || kit.primary,
@@ -4426,16 +4426,16 @@ function setMatchMinute(min) {
 }
 
 /**
- * 鏇存柊璁″垎鏉夸笅 xG / 鎺х悆 / 灏勯棬
+ * 更新计分板下 xG / 控球 / 射门
  * @param {null | { home?: object, away?: object } | object} snapOrReport
- *   鍙紶 liveSnap銆乵atch report銆佹垨 { home: {xg,possession,shots,shotsOn}, away: ... }
+ *   可传 liveSnap、match report、或 { home: {xg,possession,shots,shotsOn}, away: ... }
  */
 function updateLiveStats(snapOrReport) {
   const empty = { xg: 0, possession: 50, shots: 0, shotsOn: 0 };
   let h = empty;
   let a = empty;
   if (snapOrReport) {
-    // liveSnap 鎴?report 缁撴瀯
+    // liveSnap 或 report 结构
     if (snapOrReport.home && (snapOrReport.home.xg != null || snapOrReport.home.possession != null)) {
       h = { ...empty, ...snapOrReport.home };
       a = { ...empty, ...snapOrReport.away };
@@ -4471,7 +4471,7 @@ function updateLiveStats(snapOrReport) {
   bar("#stat-sh-bar-a", (shA / shT) * 100);
   bar("#stat-poss-bar", possH);
 
-  // 鐞冨満瑙掓爣杩蜂綘鏉★紙涓嶆尅瑙嗙嚎锛?
+  // 球场角标迷你条（不挡视线）
   if (matchView?.updateLiveStrip) {
     matchView.updateLiveStrip({
       home: { xg: xgH, possession: possH },
@@ -4484,7 +4484,7 @@ function clampPct(n) {
   return Math.max(4, Math.min(96, n));
 }
 
-/** FMM锛歺G/鎺х悆/灏勯棬 鎶樺彔鎶藉眽 */
+/** FMM：xG/控球/射门 折叠抽屉 */
 function setMatchStatsPanelOpen(open) {
   const panel = $("#match-live-stats");
   const btn = $("#btn-match-stats-toggle");
@@ -4538,7 +4538,7 @@ function setMatchBusy(busy) {
 
 /**
  * mode: "fast" | "live" | "instant"
- * fast/live 鍦ㄤ腑鍦烘殏鍋滐紱instant 涓€閿畬璧?
+ * fast/live 在中场暂停；instant 一键完赛
  */
 async function runMatch(mode) {
   if (!pendingMatch || pendingMatch.played || liveRunning) return;
@@ -4546,13 +4546,13 @@ async function runMatch(mode) {
   hidePrematchBriefPanel();
   hideHtPanel();
   hideMatchReport();
-  // 淇濈暀璧涘墠绠€鎶ヨ锛屽彧娓呮帀鏃ф瘮璧涙畫鐣欙紙鑻ユ湁锛?
+  // 保留赛前简报行，只清掉旧比赛残留（若有）
   const logEl = $("#match-log");
   if (logEl) {
     const kept = [...logEl.querySelectorAll(".event.briefing")];
     logEl.innerHTML = "";
     for (const n of kept) logEl.appendChild(n);
-    // 鑻ユ棤绠€鎶ワ紙寮傚父璺緞锛夛紝琛ュ啓涓€娆?
+    // 若无简报（异常路径），补写一次
     if (!kept.length && pendingMatch) {
       const user = getUserClub(world);
       const brief = buildBriefingForFixture(pendingMatch, user);
@@ -4573,20 +4573,20 @@ async function runMatch(mode) {
   updateMatchPlaybackUI();
 
   try {
-    // 纭繚鐞冨満宸叉寕杞?
+    // 确保球场已挂载
     ensureMatchPitch();
     setMatchLiveState("live");
 
-    // 璇诲彇璧涘墠璁茶瘽锛堥潰鏉块殣钘忓墠锛?
+    // 读取赛前讲话（面板隐藏前）
     const prePanel = $("#match-pre-brief");
     selectedPreTalk = getSelectedTeamTalk(prePanel, "pre-team-talk") || selectedPreTalk || "encourage";
 
     if (mode === "instant") {
       const result = simulateMatch(world, pendingMatch, { teamTalkId: selectedPreTalk });
-      // 蹇€熷洖鏀?2D锛堝彈鍊嶉€熷奖鍝嶏紱杩涚悆浼氶珮鍏夛級
+      // 快速回放 2D（受倍速影响；进球会高光）
       if (matchView) {
         await matchView.replayEvents(result.events, pendingMatch, {
-          // 涓€閿畬璧涳細鍦ㄦ墍閫夊€嶉€熶笂鍐嶇暐蹇竴鐐癸紝浣嗕粛灏婇噸 脳1 姝ｅ父瑙傛劅
+          // 一键完赛：在所选倍速上再略快一点，但仍尊重 ×1 正常观感
           speed: Math.max(0.5, Number(matchSpeed) || 1) * (Number(matchSpeed) <= 1 ? 1.05 : 1.35),
           sleepFn: sleepPlayback,
           onStep: (ev, snap) => {
@@ -4625,10 +4625,10 @@ async function runMatch(mode) {
     }
 
     matchState = createMatchSession(world, pendingMatch);
-    // 璧涘墠闃熷唴璁茶瘽 鈫?澹皵 + 涓婂崐鍦轰慨姝?+ 濯掍綋锛堜簨浠剁粡 playFirstHalf onEvent / 蹇€熸棩蹇楀埛鍑猴級
+    // 赛前队内讲话 → 士气 + 上半场修正 + 媒体（事件经 playFirstHalf onEvent / 快速日志刷出）
     const talkRes = applyTeamTalk(matchState, selectedPreTalk, "pre");
     if (talkRes.ok) toast(talkRes.msg);
-    // 浼氳瘽鍒涘缓鍚庨樀瀹瑰彲鑳?autoLineup锛屽埛鏂扮悆鍦?
+    // 会话创建后阵容可能 autoLineup，刷新球场
     ensureMatchPitch(true);
     const live = mode === "live";
     matchState._liveMode = live;
@@ -4639,7 +4639,7 @@ async function runMatch(mode) {
 
     await playFirstHalf(matchState, { onEvent });
 
-    // 闈炵洿鎾細涓婂崐鍦轰簨浠跺啓鍏ユ棩蹇楋紙鐢婚潰宸插湪 onEvent 椹卞姩锛?
+    // 非直播：上半场事件写入日志（画面已在 onEvent 驱动）
     if (!live) {
       let goalCursor = 0;
       for (const ev of matchState.events) {
@@ -4653,7 +4653,7 @@ async function runMatch(mode) {
       }
       setMatchScore(matchState.hg, matchState.ag);
       setMatchMinute(45);
-      // 涓満鏃剁敤 session 缁熻鍒蜂竴娆℃潯
+      // 中场时用 session 统计刷一次条
       if (matchState.stats) {
         updateLiveStats({
           home: {
@@ -4683,11 +4683,11 @@ async function runMatch(mode) {
       const ctxEv = matchState.events.find((e) => e.type === "context");
       if (ctxEv) {
         const ctx = $("#match-context");
-        if (ctx) ctx.textContent = ctxEv.text.replace(/^鎯呭锛?, "");
+        if (ctx) ctx.textContent = ctxEv.text.replace(/^情境：/, "");
       }
     }
 
-    // 涓満鏆傚仠锛氬仠鎺夋挱鏀炬帶鍒讹紝閬垮厤鍗″湪銆屼笅涓€姝ャ€?
+    // 中场暂停：停掉播放控制，避免卡在「下一步」
     matchPlayback.controlsEnabled = false;
     matchPlayback.paused = false;
     if (matchView?.setFrozen) matchView.setFrozen(false);
@@ -4713,7 +4713,7 @@ function ensureMatchPitch(remount = false) {
   const away = world.clubs.find((c) => c.id === pendingMatch.away);
   if (!home || !away) return;
   const onPlayerClick = (playerId) => {
-    // 瀹屾暣璧勬枡寮圭獥锛堟殏鍋滄椂鏈€鍚堥€傦紝杩涜涓篃鍙偣锛?
+    // 完整资料弹窗（暂停时最合适，进行中也可点）
     showPlayerModal(playerId);
   };
   if (!matchView || remount || !matchView._built) {
@@ -4778,23 +4778,22 @@ function openHalfTimePanel() {
   renderHtFitnessBars();
   renderHtRoleReview();
   renderHtRoleEditors();
-  // 鎹㈤樀鍨嬫椂閲嶉厤瑙掕壊缂栬緫鍣?
-  const htForm = $("#ht-formation");
-  if (htForm && !htForm.dataset.roleBound) {
-    htForm.dataset.roleBound = "1";
-    htForm.addEventListener("change", () => {
+  const htFormEl = $("#ht-formation");
+  if (htFormEl && !htFormEl.dataset.roleBound) {
+    htFormEl.dataset.roleBound = "1";
+    htFormEl.addEventListener("change", () => {
       if (!matchState?.userClub) return;
       const club = matchState.userClub;
       ensureTactics(club);
-      const next = htForm.value;
+      const next = htFormEl.value;
       if (next && FORMATIONS[next] && next !== club.tactics.formation) {
         club.tactics.formation = next;
         ensureMatchLineup(club);
         ensureLineupRoles(club, { reset: true });
         toast(
           getLang() === "en"
-            ? `Formation 鈫?${next} 路 roles reset`
-            : `闃靛瀷鏀逛负 ${next} 路 瑙掕壊宸叉寜榛樿閲嶉厤`
+            ? `Formation -> ${next} · roles reset`
+            : `阵型改为 ${next} · 角色已按默认重配`
         );
       }
       renderHtRoleEditors();
@@ -4806,7 +4805,7 @@ function openHalfTimePanel() {
   renderHtSubsList();
   if (matchView) {
     matchView.phase = "pause";
-    matchView.setBanner(getLang() === "en" ? "HALF-TIME" : "涓満浼戞伅", "info");
+    matchView.setBanner(getLang() === "en" ? "HALF-TIME" : "中场休息", "info");
     matchView._syncClickable?.();
   }
   $("#btn-match-continue").disabled = true;
@@ -4816,7 +4815,7 @@ function openHalfTimePanel() {
   if (inst) inst.disabled = true;
 }
 
-/** 涓満锛氫笂鍗婂満瑙掕壊澶嶇洏 */
+/** 中场：上半场角色复盘 */
 function renderHtRoleReview() {
   const box = $("#match-ht-role-review");
   if (!box || !matchState) return;
@@ -4828,7 +4827,7 @@ function renderHtRoleReview() {
     return;
   }
   const tips = (rev.tips || [])
-    .map((t) => `<div class="ht-role-tip">鈥?${escapeHtml(t)}</div>`)
+    .map((line) => `<div class="ht-role-tip">• ${escapeHtml(line)}</div>`)
     .join("");
   const contrib = (rev.contributors || [])
     .slice(0, 4)
@@ -4842,7 +4841,7 @@ function renderHtRoleReview() {
     .join("");
   box.innerHTML = `
     <div class="ht-role-review-head">
-      <strong>${escapeHtml(en ? "1st-half role review" : "涓婂崐鍦鸿鑹插鐩?)}</strong>
+      <strong>${escapeHtml(en ? "1st-half role review" : "上半场角色复盘")}</strong>
       <span class="muted">${escapeHtml(rev.formation || "")}</span>
     </div>
     ${contrib ? `<div class="ht-role-contrib">${contrib}</div>` : ""}
@@ -4851,7 +4850,7 @@ function renderHtRoleReview() {
   box.classList.remove("hidden");
 }
 
-/** 涓満锛氶€愪汉瑙掕壊涓嬫媺锛堜笅鍗婂満鐢熸晥锛?*/
+/** 中场：下半场角色指令编辑 */
 function renderHtRoleEditors() {
   const box = $("#match-ht-roles");
   if (!box || !matchState?.userClub) return;
@@ -4876,7 +4875,7 @@ function renderHtRoleEditors() {
           return `<option value="${id}" ${id === rid ? "selected" : ""}>${escapeHtml(lab)}</option>`;
         })
         .join("");
-      const name = p ? escapeHtml(playerDisplaySurname(p.name, p.nationality) || p.name) : "鈥?;
+      const name = p ? escapeHtml(playerDisplaySurname(p.name, p.nationality) || p.name) : "—";
       return `<label class="ht-role-edit">
         <span class="ht-role-edit-pos">${escapeHtml(POS_LABEL[slot.pos] || slot.pos)}</span>
         <span class="ht-role-edit-name">${name}</span>
@@ -4886,8 +4885,8 @@ function renderHtRoleEditors() {
     .join("");
   box.innerHTML = `
     <div class="ht-role-edit-head">
-      <strong>${escapeHtml(en ? "Roles for 2nd half" : "涓嬪崐鍦鸿鑹叉寚浠?)}</strong>
-      <span class="muted">${escapeHtml(en ? "Change formation above resets defaults" : "涓婃柟鎹㈤樀鍨嬩細閲嶇疆榛樿瑙掕壊")}</span>
+      <strong>${escapeHtml(en ? "Roles for 2nd half" : "下半场角色指令")}</strong>
+      <span class="muted">${escapeHtml(en ? "Changing formation resets defaults" : "上方换阵型会重置默认角色")}</span>
     </div>
     <div class="ht-role-edit-grid">${rows}</div>
   `;
@@ -4900,28 +4899,27 @@ function collectHtRoles() {
   if (!sels.length) return null;
   const roles = [];
   sels.forEach((sel) => {
-    const i = +sel.dataset.htRoleSlot;
-    roles[i] = sel.value;
+    roles[+sel.dataset.htRoleSlot] = sel.value;
   });
   return roles;
 }
 
-/** 涓満闃熷唴璁茶瘽閫夐」锛堟寜姣斿垎鎺ㄨ崘榛樿锛?*/
+/** 中场队内讲话选项（按比分推荐默认） */
 function renderHtTeamTalk() {
   const box = $("#match-ht-talk");
   if (!box || !matchState) return;
   const suggested = suggestHalfTimeTalk(matchState) || "encourage";
   const en = getLang() === "en";
-  // 鐩存帴鍐欏叆鍐呭锛岄伩鍏嶄笌 #match-ht-talk 鐨?panel 濂楀▋
+  // 直接写入内容，避免与 #match-ht-talk 的 panel 套娃
   box.className = "team-talk-panel";
   box.dataset.phase = "ht";
   box.innerHTML = `
     <div class="team-talk-head">
-      <strong>${escapeHtml(en ? "Team talk" : "闃熷唴璁茶瘽")}</strong>
+      <strong>${escapeHtml(en ? "Team talk" : "队内讲话")}</strong>
       <span class="muted team-talk-hint">${escapeHtml(
         en
-          ? "Sets the tone for the second half 路 morale + modifiers"
-          : "瀹氳皟涓嬪崐鍦?路 褰卞搷澹皵涓庢敾闃蹭慨姝?
+          ? "Sets the tone for the second half · morale + modifiers"
+          : "定调下半场 · 影响士气与攻防修正"
       )}</span>
     </div>
     <div class="team-talk-grid">${TEAM_TALK_IDS.map((id) => {
@@ -4939,13 +4937,13 @@ function renderHtTeamTalk() {
   if (rec) {
     const badge = document.createElement("span");
     badge.className = "team-talk-rec";
-    badge.textContent = en ? "Suggested" : "鎺ㄨ崘";
+    badge.textContent = en ? "Suggested" : "推荐";
     rec.appendChild(badge);
   }
   bindTeamTalkPicker(box);
 }
 
-/** 涓満锛氫綋鑳藉憡鎬?/ 榛勭墝杈圭紭 / 姣斿垎寤鸿 */
+/** 中场：体能告急 / 黄牌边缘 / 比分建议 */
 function renderHtTips() {
   const box = $("#match-ht-tips");
   if (!box || !matchState) return;
@@ -4954,31 +4952,31 @@ function renderHtTips() {
   const parts = [];
   if (tips.scoreTip) {
     parts.push(
-      `<div class="ht-tip score"><strong>${en ? "Score" : "姣斿垎"}</strong> ${escapeHtml(tips.scoreTip)}</div>`
+      `<div class="ht-tip score"><strong>${en ? "Score" : "比分"}</strong> ${escapeHtml(tips.scoreTip)}</div>`
     );
   }
   if (tips.avgFit != null) {
     parts.push(
-      `<div class="ht-tip fit"><strong>${en ? "Avg fitness" : "棣栧彂浣撹兘"}</strong> ${tips.avgFit}%</div>`
+      `<div class="ht-tip fit"><strong>${en ? "Avg fitness" : "首发体能"}</strong> ${tips.avgFit}%</div>`
     );
   }
   if (tips.fitness?.length) {
     const list = tips.fitness
       .map((p) => `${escapeHtml(p.name)} <em>${Math.round(p.fitness ?? 0)}%</em>`)
-      .join(" 路 ");
+      .join(" · ");
     parts.push(
-      `<div class="ht-tip warn"><strong>${en ? "Tired" : "浣撹兘鍛婃€?}</strong> ${list}</div>`
+      `<div class="ht-tip warn"><strong>${en ? "Tired" : "体能告急"}</strong> ${list}</div>`
     );
   }
   if (tips.yellows?.length) {
     const list = tips.yellows
       .map(
         (p) =>
-          `${escapeHtml(p.name)}${p.booked ? (en ? " (booked)" : "锛堟湰鍦哄凡榛勶級") : ` (${p.yellows})`}`
+          `${escapeHtml(p.name)}${p.booked ? (en ? " (booked)" : "（本场已黄）") : ` (${p.yellows})`}`
       )
-      .join(" 路 ");
+      .join(" · ");
     parts.push(
-      `<div class="ht-tip card"><strong>${en ? "Card risk" : "榛勭墝杈圭紭"}</strong> ${list}</div>`
+      `<div class="ht-tip card"><strong>${en ? "Card risk" : "黄牌边缘"}</strong> ${list}</div>`
     );
   }
   if (!parts.length) {
@@ -4991,7 +4989,7 @@ function renderHtTips() {
 }
 
 /**
- * 涓満锛氶鍙戜綋鑳芥潯锛堟寜浣撹兘鍗囧簭锛屼綆浣撹兘楂樹寒锛?
+ * 中场：首发体能条（按体能升序，低体能高亮）
  */
 function renderHtFitnessBars() {
   const box = $("#match-ht-fitness");
@@ -5015,7 +5013,7 @@ function renderHtFitnessBars() {
     return;
   }
   const en = getLang() === "en";
-  const title = en ? "XI fitness" : "棣栧彂浣撹兘";
+  const title = en ? "XI fitness" : "首发体能";
   const rows = xi
     .map((p) => {
       const fit = Math.round(p.fitness ?? 100);
@@ -5083,12 +5081,12 @@ function setLiveTacBarVisible(show) {
 
 function onLiveTacApply() {
   if (!matchState?.userClub || matchState.finished) {
-    toast(getLang() === "en" ? "Not available" : "褰撳墠鏃犳硶璋冩暣");
+    toast(getLang() === "en" ? "Not available" : "当前无法调整");
     return;
   }
-  // 浠呬笅鍗婂満 live 鏈夋剰涔夛紱涓婂崐鍦?涓満鐢?HT 闈㈡澘
+  // 仅下半场 live 有意义；上半场/中场用 HT 面板
   if (matchState.phase === "ht" || matchState.phase === "h1") {
-    toast(getLang() === "en" ? "Use half-time panel" : "璇峰湪涓満闈㈡澘璋冩暣");
+    toast(getLang() === "en" ? "Use half-time panel" : "请在中场面板调整");
     return;
   }
   const orders = {
@@ -5101,14 +5099,14 @@ function onLiveTacApply() {
   };
   const res = applyLiveTactics(matchState, orders);
   if (!res.ok) {
-    toast(res.msg || "澶辫触");
+    toast(res.msg || "失败");
     return;
   }
-  if (res.msg === "鏃犲彉鍖?) {
-    toast(t("match.tacNoChange") || (getLang() === "en" ? "No change" : "鏃犲彉鍖?));
+  if (res.msg === "无变化") {
+    toast(t("match.tacNoChange") || (getLang() === "en" ? "No change" : "无变化"));
     return;
   }
-  // 鐢婚潰 + 璇勮鍙嶉
+  // 画面 + 评论反馈
   const side = matchState.userSide === "away" ? "away" : "home";
   const styleKey = res.tactics.style || "balanced";
   const styleName = t("style." + styleKey) || styleKey;
@@ -5118,11 +5116,11 @@ function onLiveTacApply() {
       pressing: res.tactics.pressing,
       tempo: res.tactics.tempo,
       styleLabel: styleName,
-      label: res.event?.text?.replace(/^馃搵\s*/, "") || undefined,
+      label: res.event?.text?.replace(/^📋\s*/, "") || undefined,
     });
   }
   if (res.event?.text) appendMatchEvent(res.event);
-  // 楂樺帇杩?鈫?琛ㄧ幇灞傚紑涓€娈垫敾鍔?
+  // 高压迫 → 表现层开一段攻势
   if (res.tactics.pressing >= 4 && matchView?.beginAttackPhase) {
     matchView.beginAttackPhase(side, { ms: 12000, intensity: 0.75, caption: false });
   }
@@ -5131,7 +5129,7 @@ function onLiveTacApply() {
       style: styleName,
       press: res.tactics.pressing,
       tempo: res.tactics.tempo,
-    }) || (getLang() === "en" ? "Tactics applied" : "鎴樻湳宸插簲鐢?)
+    }) || (getLang() === "en" ? "Tactics applied" : "战术已应用")
   );
 }
 
@@ -5149,14 +5147,14 @@ function renderHtSubSelects() {
     .filter((p) => !pendingOut.has(p.id))
     .map(
       (p) =>
-        `<option value="${p.id}">${POS_LABEL[p.pos] || p.pos} ${p.name} 路 ${p.ovr} 路 浣?{Math.round(p.fitness ?? 0)}</option>`
+        `<option value="${p.id}">${POS_LABEL[p.pos] || p.pos} ${p.name} · ${p.ovr} · 体${Math.round(p.fitness ?? 0)}</option>`
     )
     .join("");
   inSel.innerHTML = bench
     .filter((p) => !pendingIn.has(p.id))
     .map(
       (p) =>
-        `<option value="${p.id}">${POS_LABEL[p.pos] || p.pos} ${p.name} 路 ${p.ovr} 路 浣?{Math.round(p.fitness ?? 0)}</option>`
+        `<option value="${p.id}">${POS_LABEL[p.pos] || p.pos} ${p.name} · ${p.ovr} · 体${Math.round(p.fitness ?? 0)}</option>`
     )
     .join("");
 }
@@ -5170,7 +5168,7 @@ function renderHtSubsList() {
   if (left) left.textContent = `${t("match.subsLeftFull", { n: remain, max: matchState.maxSubs })}`;
   if (ul) {
     ul.innerHTML = pendingSubs
-      .map((s) => `<li>馃攧 ${escapeHtml(s.outName)} 鈫?鈫?${escapeHtml(s.inName)} 鈫?/li>`)
+      .map((s) => `<li>🔄 ${escapeHtml(s.outName)} ↓ → ${escapeHtml(s.inName)} ↑</li>`)
       .join("");
   }
 }
@@ -5204,62 +5202,62 @@ function onHtAddSub() {
   });
   renderHtSubSelects();
   renderHtSubsList();
-  // 涓満闈㈡澘锛氱珛鍒诲彲瑙佸弽棣堬紙鐪熸涓婂満鍦ㄤ笅鍗婂満寮€濮嬫椂锛?
+  // 中场面板：立刻可见反馈（真正上场在下半场开始时）
   const en = getLang() === "en";
   toast(
     t("match.subQueued", { out: outP.name, inn: inP.name }) ||
-      (en ? `Queued: ${outP.name} 鈫?${inP.name}` : `宸茬櫥璁帮細${outP.name} 鈫?${inP.name}`)
+      (en ? `Queued: ${outP.name} → ${inP.name}` : `已登记：${outP.name} → ${inP.name}`)
   );
   const tip = $("#match-ht-score");
   if (tip && pendingSubs.length) {
     const base = tip.dataset.htBase || tip.textContent;
     tip.dataset.htBase = base;
-    const names = pendingSubs.map((s) => `${s.outName}鈫?{s.inName}`).join(" 路 ");
-    tip.textContent = `${base} 路 ${en ? "Subs" : "鎹汉"}: ${names}`;
+    const names = pendingSubs.map((s) => `${s.outName}→${s.inName}`).join(" · ");
+    tip.textContent = `${base} · ${en ? "Subs" : "换人"}: ${names}`;
   }
 }
 
-/** 涓嬪崐鍦哄紑鐞冩彁绀烘枃妗堬紙姣斿垎 + 鏄惁宸茶皟锛?*/
+/** 下半场开球提示文案（比分 + 是否已调） */
 function buildSecondHalfKickTip(applyOrders, orders) {
   const en = getLang() === "en";
-  if (!matchState) return en ? "2nd half" : "涓嬪崐鍦?;
+  if (!matchState) return en ? "2nd half" : "下半场";
   const club = matchState.userClub;
   const myG = club === matchState.home ? matchState.hg : matchState.ag;
   const opG = club === matchState.home ? matchState.ag : matchState.hg;
   let scoreBit = "";
-  if (myG < opG) scoreBit = en ? "Trailing" : "钀藉悗";
-  else if (myG > opG) scoreBit = en ? "Leading" : "棰嗗厛";
-  else scoreBit = en ? "Level" : "骞冲眬";
+  if (myG < opG) scoreBit = en ? "Trailing" : "落后";
+  else if (myG > opG) scoreBit = en ? "Leading" : "领先";
+  else scoreBit = en ? "Level" : "平局";
 
   if (!applyOrders) {
     return en
-      ? `${scoreBit} 鈥?no changes, 2nd half`
-      : `${scoreBit} 路 涓嶈皟鏁达紝涓嬪崐鍦哄紑濮媊;
+      ? `${scoreBit} — no changes, 2nd half`
+      : `${scoreBit} · 不调整，下半场开始`;
   }
   const bits = [scoreBit];
   if (orders?.style) {
     bits.push(t("style." + orders.style) || orders.style);
   }
   if (orders?.pressing != null) {
-    bits.push(en ? `Press ${orders.pressing}` : `鍘嬭揩 ${orders.pressing}`);
+    bits.push(en ? `Press ${orders.pressing}` : `压迫 ${orders.pressing}`);
   }
   if (orders?.tempo != null) {
-    bits.push(en ? `Tempo ${orders.tempo}` : `鑺傚 ${orders.tempo}`);
+    bits.push(en ? `Tempo ${orders.tempo}` : `节奏 ${orders.tempo}`);
   }
   if (orders?.width != null) {
-    bits.push(en ? `Width ${orders.width}` : `瀹藉害 ${orders.width}`);
+    bits.push(en ? `Width ${orders.width}` : `宽度 ${orders.width}`);
   }
   if (orders?.defensiveLine != null) {
-    bits.push(en ? `Line ${orders.defensiveLine}` : `闃茬嚎 ${orders.defensiveLine}`);
+    bits.push(en ? `Line ${orders.defensiveLine}` : `防线 ${orders.defensiveLine}`);
   }
   if (orders?.formation) {
     bits.push(orders.formation);
   }
   const nSub = orders?.subs?.length || 0;
-  if (nSub) bits.push(en ? `${nSub} sub(s)` : `${nSub} 浜烘崲浜篳);
+  if (nSub) bits.push(en ? `${nSub} sub(s)` : `${nSub} 人换人`);
   return en
-    ? `${bits.join(" 路 ")} 鈥?2nd half`
-    : `${bits.join(" 路 ")} 路 涓嬪崐鍦哄紑濮媊;
+    ? `${bits.join(" · ")} — 2nd half`
+    : `${bits.join(" · ")} · 下半场开始`;
 }
 
 async function finishHalfTime(applyOrders) {
@@ -5286,7 +5284,7 @@ async function finishHalfTime(applyOrders) {
         teamTalk: htTalk,
       }
     : {
-        // 銆屼笉璋冩暣銆嶄粛鍙繚鐣欎腑鍦鸿璇濓紙鑻ョ帺瀹跺凡閫夛級
+        // 「不调整」仍可保留中场讲话（若玩家已选）
         teamTalk: htTalk,
       };
 
@@ -5296,21 +5294,21 @@ async function finishHalfTime(applyOrders) {
   try {
     const live = !!matchState._liveMode;
     setMatchLiveState("live");
-    // 涓嬪崐鍦猴細鐩存挱鏃舵樉绀哄満杈规垬鏈潯
+    // 下半场：直播时显示场边战术条
     if (live) setLiveTacBarVisible(true);
 
-    // 寮€鐞冩彁绀猴紙妯箙 + 璇勮锛?
+    // 开球提示（横幅 + 评论）
     if (matchView?.showSecondHalfKickoff) {
       matchView.showSecondHalfKickoff({ text: kickTip, lang: getLang() });
     }
     appendMatchEvent({
       type: "coach",
       minute: 46,
-      text: `馃挰 ${kickTip}`,
+      text: `💬 ${kickTip}`,
     });
     toast(kickTip);
 
-    // continueSecondHalf锛氫腑鍦烘垬鏈?鎹汉浜嬩欢浼氱珛鍒?onEvent
+    // continueSecondHalf：中场战术/换人事件会立刻 onEvent
     const onEvent = async (ev, snap) => {
       if (snap?.home) updateLiveStats(snap);
       await driveMatchEvent(ev, snap, { live });
@@ -5323,7 +5321,7 @@ async function finishHalfTime(applyOrders) {
     const result = await continueSecondHalf(matchState, orders, { onEvent });
 
     if (!live) {
-      // 蹇€熸ā鎷燂細onEvent 涓嶅啓鏃ュ織锛屾澶勮ˉ鍒凤紙鍚腑鍦烘垬鏈?鎹汉锛?
+      // 快速模拟：onEvent 不写日志，此处补刷（含中场战术/换人）
       let goalCursor = goalsBefore;
       for (const ev of matchState.events.slice(eventCountBefore)) {
         if (ev.type === "tick" || !ev.text) continue;
@@ -5335,7 +5333,7 @@ async function finishHalfTime(applyOrders) {
         }
       }
     }
-    // 鐩存挱锛歴ub/tactics 宸插湪 driveMatchEvent 瀹炴椂鍐欏叆锛屾棤闇€瀹屽満鍐嶈ˉ
+    // 直播：sub/tactics 已在 driveMatchEvent 实时写入，无需完场再补
 
     setMatchScore(result.homeGoals, result.awayGoals);
     setMatchMinute(90);
@@ -5387,17 +5385,17 @@ function showMatchReport(report, opts = {}) {
   };
   const meta = [
     report.weather ? `${report.weather.icon} ${report.weather.name}` : "",
-    report.derby ? "馃敟 寰锋瘮" : "",
-    report.bigMatch ? "猸?鐒︾偣" : "",
+    report.derby ? "🔥 德比" : "",
+    report.bigMatch ? "⭐ 焦点" : "",
   ]
     .filter(Boolean)
-    .join(" 路 ");
+    .join(" · ");
 
-  // 杩涚悆鍒楄〃锛氬敖閲忎笌鏈満鍥炴斁缂撳瓨瀵归綈锛屽彲鐐瑰嚮鍐嶇湅
+  // 进球列表：尽量与本场回放缓存对齐，可点击再看
   let scorerGoalIdx = 0;
   const scorerHtml = (report.scorers || [])
     .map((s) => {
-      const raw = String(s.text || "").replace(/^鈿絓s*/, "");
+      const raw = String(s.text || "").replace(/^⚽\s*/, "");
       const namePart = s.playerId ? playerLinkHtml(s.playerId, raw) : escapeHtml(raw);
       const gi = scorerGoalIdx;
       const hasReplay = gi < matchPlayback.goals.length;
@@ -5422,7 +5420,7 @@ function showMatchReport(report, opts = {}) {
         const note = bits.length ? ` <span class="muted">${bits.join(" ")}</span>` : "";
         const name = x.playerId
           ? playerLinkHtml(x.playerId, x.name)
-          : escapeHtml(x.name || "鈥?);
+          : escapeHtml(x.name || "—");
         return `<tr>
           <td class="muted">${escapeHtml(x.pos || "")}</td>
           <td>${name}${note}</td>
@@ -5439,7 +5437,7 @@ function showMatchReport(report, opts = {}) {
   const motm = ratings?.motm;
   if (ratings?.home?.length || ratings?.away?.length) {
     ratingsHtml = `<div class="report-ratings">
-      <strong>${t("match.ratings") || "鐞冨憳璇勫垎"}</strong>
+      <strong>${t("match.ratings") || "球员评分"}</strong>
       <div class="report-ratings-grid">
         ${rateSideHtml(ratings.home, h.short || h.name)}
         ${rateSideHtml(ratings.away, a.short || a.name)}
@@ -5447,19 +5445,19 @@ function showMatchReport(report, opts = {}) {
     </div>`;
   }
 
-  // MOTM 澶у崱 + 鏂囧瓧澶嶇洏锛堢粡鐞嗗彲璇伙級
+  // MOTM 大卡 + 文字复盘（经理可读）
   let motmCardHtml = "";
   if (motm) {
     const bits = [];
     if (motm.goals) bits.push(`${motm.goals}G`);
     if (motm.assists) bits.push(`${motm.assists}A`);
     if (motm.saves) bits.push(`${motm.saves}S`);
-    const note = bits.length ? bits.join(" 路 ") : motm.pos || "";
+    const note = bits.length ? bits.join(" · ") : motm.pos || "";
     const nameHtml = motm.playerId
       ? playerLinkHtml(motm.playerId, motm.name)
-      : escapeHtml(motm.name || "鈥?);
+      : escapeHtml(motm.name || "—");
     motmCardHtml = `<div class="report-motm-card">
-      <div class="report-motm-label">${escapeHtml(t("match.motm") || "鏈満鏈€浣?)}</div>
+      <div class="report-motm-label">${escapeHtml(t("match.motm") || "本场最佳")}</div>
       <div class="report-motm-body">
         <span class="report-motm-pos">${escapeHtml(motm.pos || "")}</span>
         <div class="report-motm-info">
@@ -5476,13 +5474,13 @@ function showMatchReport(report, opts = {}) {
   const narrative = Array.isArray(report.narrative) ? report.narrative : [];
   const narrativeHtml = narrative.length
     ? `<div class="report-narrative">
-        <strong>${escapeHtml(t("match.narrative") || "鏈満澶嶇洏")}</strong>
+        <strong>${escapeHtml(t("match.narrative") || "本场复盘")}</strong>
         <ul>${narrative.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
       </div>`
     : "";
 
   const reviewBadge = review
-    ? `<span class="report-review-badge">${escapeHtml(t("fix.viewReport") || (getLang() === "en" ? "Archive" : "鍘嗗彶鎴樻姤"))}</span>`
+    ? `<span class="report-review-badge">${escapeHtml(t("fix.viewReport") || (getLang() === "en" ? "Archive" : "历史战报"))}</span>`
     : "";
 
   el.innerHTML = `
@@ -5520,17 +5518,17 @@ function showMatchReport(report, opts = {}) {
   `;
   el.classList.remove("hidden");
 
-  // 瀹屽満锛氱悆鍦轰笂楂樹寒 MOTM
+  // 完场：球场上高亮 MOTM
   if (motm && matchView?.highlightMotm) {
     matchView.highlightMotm(motm);
   }
 }
 
-/** 鎴樻姤鍐呰鑹插鐩?HTML */
+/** 战报内角色复盘 */
 function formatRoleReviewHtml(rev) {
   if (!rev) return "";
   const en = getLang() === "en";
-  const tips = (rev.tips || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  const tips = (rev.tips || []).map((line) => `<li>${escapeHtml(line)}</li>`).join("");
   const rows = (rev.contributors || [])
     .slice(0, 6)
     .map((r) => {
@@ -5541,18 +5539,18 @@ function formatRoleReviewHtml(rev) {
       return `<tr>
         <td>${escapeHtml(r.pos)}</td>
         <td>${playerLinkHtml(r.playerId, r.name)} <span class="muted">${escapeHtml(lab)}</span></td>
-        <td class="num">${bits.join(" ") || "鈥?}</td>
+        <td class="num">${bits.join(" ") || "—"}</td>
       </tr>`;
     })
     .join("");
   return `<div class="report-role-review">
-    <strong>${escapeHtml(en ? "Role review" : "瑙掕壊澶嶇洏")}</strong>
-    <span class="muted"> 路 ${escapeHtml(rev.formation || "")}</span>
+    <strong>${escapeHtml(en ? "Role review" : "角色复盘")}</strong>
+    <span class="muted"> · ${escapeHtml(rev.formation || "")}</span>
     ${
       rows
         ? `<table class="report-ratings-table" style="margin-top:0.4rem"><tbody>${rows}</tbody></table>`
         : `<p class="muted" style="margin:0.35rem 0 0">${escapeHtml(
-            en ? "No goal involvement from assigned roles." : "鏈満瑙掕壊鏈洿鎺ヨ础鐚繘鐞?鍔╂敾"
+            en ? "No goal involvement from assigned roles." : "本场角色未直接贡献进球/助攻"
           )}</p>`
     }
     ${tips ? `<ul class="opp-tips">${tips}</ul>` : ""}
@@ -5568,7 +5566,7 @@ function finishMatchUI() {
   if (inst) inst.disabled = true;
   hideHtPanel();
   setLiveTacBarVisible(false);
-  // 瀹岃禌鍚庡叧闂殏鍋滄帶鍒讹紝淇濈暀杩涚悆鍥炵湅鍒楄〃
+  // 完赛后关闭暂停控制，保留进球回看列表
   matchPlayback.controlsEnabled = false;
   matchPlayback.paused = false;
   matchPlayback.waitingStep = false;
@@ -5588,7 +5586,7 @@ function appendMatchEvent(ev, opts = {}) {
     ev.minute != null && ev.minute !== ""
       ? `${ev.minute}'`
       : ev.type === "briefing"
-        ? "鈥?
+        ? "—"
         : "";
   const text = localizeMatchEvent(ev);
   const goalIndex = opts.goalIndex;
@@ -5605,42 +5603,42 @@ function appendMatchEvent(ev, opts = {}) {
   log.scrollTop = log.scrollHeight;
 }
 
-/** 鍏抽敭姣旇禌浜嬩欢涓嫳鍒囨崲锛堝師鏂囦粛涓轰腑鏂囧紩鎿庝骇鍑猴紝EN 鍋氱畝鍗曟槧灏勶級 */
+/** 关键比赛事件中英切换（原文仍为中文引擎产出，EN 做简单映射） */
 function localizeMatchEvent(ev) {
   if (!ev?.text) return "";
   if (getLang() !== "en") return ev.text;
   let s = ev.text;
   const map = [
-    [/^姣旇禌寮€濮嬶紒$/, "Kick-off!"],
-    [/^涓満浼戞伅/, "Half-time"],
-    [/^鍏ㄥ満缁撴潫/, "Full-time"],
-    [/^鎯呭锛?, "Context: "],
-    [/^寰锋瘮澶ф垬/, "Derby"],
-    [/^鐒︾偣鏉禌/, "Cup spotlight"],
-    [/^鐒︾偣鎴?, "Big match"],
-    [/^馃搵 璧涘墠绠€鎶?, "馃搵 Pre-match briefing"],
-    [/^涓诲満/, "Home"],
-    [/^瀹㈠満/, "Away"],
-    [/^鍋滆禌锛?, "Suspended: "],
-    [/^浼ょ梾锛?, "Injured: "],
-    [/^榛勭墝杈圭紭锛?, "On yellow limit: "],
-    [/^瀵规柟濞佽儊锛?, "Threats: "],
-    [/^浜哄憳榻愬叏锛屾棤閲嶅ぇ缂洪樀$/, "Full squad available"],
-    [/^馃挰 (\d+)' 鏁欑粌甯細/, "馃挰 $1' Coach: "],
-    [/^钀藉悗锛屽彲鑰冭檻鍔犲己鍘嬭揩鎴栨崲杩涙敾鐐?, "Trailing 鈥?press higher or bring attackers"],
-    [/^棰嗗厛锛屾敞鎰忔帶鍦轰笌浣撹兘鍒嗛厤/, "Leading 鈥?manage tempo and fitness"],
-    [/^鍍垫寔涓紝鍙井璋冭妭濂忓鎵剧獊鐮?, "Stalemate 鈥?tweak tempo for a breakthrough"],
-    [/^棣栧彂骞冲潎浣撹兘/, "XI avg fitness "],
-    [/^鍚嶄富鍔涗綋鑳藉憡鎬ワ紝寤鸿鎹汉/, " starters low on fitness 鈥?consider subs"],
-    [/^姣斿垎鑳剁潃锛屾渶鍚?15 鍒嗛挓鏄叧閿獥鍙?, "Tight score 鈥?last 15 is decisive"],
-    [/^浠呰惤鍚?1 鐞冿紝鍙啋闄╁帇涓?, "One goal down 鈥?risk going forward"],
-    [/^瀹堜綇浼樺娍锛屽埆鎬ヤ簬鍐掕繘/, "Protect the lead 鈥?don't overcommit"],
-    [/^鑰冭檻杞崲/, "consider rotation"],
-    [/^馃搵 涓満璋冩暣锛?, "馃搵 HT tweak: "],
-    [/^涓ら粍鍙樹竴绾?, "Second yellow 鈫?red"],
-    [/^绾㈢墝/, "Red card"],
-    [/^鍋滆禌/, "suspended"],
-    [/^璧涘榛勭墝/, "season yellows"],
+    [/^比赛开始！$/, "Kick-off!"],
+    [/^中场休息/, "Half-time"],
+    [/^全场结束/, "Full-time"],
+    [/^情境：/, "Context: "],
+    [/^德比大战/, "Derby"],
+    [/^焦点杯赛/, "Cup spotlight"],
+    [/^焦点战/, "Big match"],
+    [/^📋 赛前简报/, "📋 Pre-match briefing"],
+    [/^主场/, "Home"],
+    [/^客场/, "Away"],
+    [/^停赛：/, "Suspended: "],
+    [/^伤病：/, "Injured: "],
+    [/^黄牌边缘：/, "On yellow limit: "],
+    [/^对方威胁：/, "Threats: "],
+    [/^人员齐全，无重大缺阵$/, "Full squad available"],
+    [/^💬 (\d+)' 教练席：/, "💬 $1' Coach: "],
+    [/^落后，可考虑加强压迫或换进攻点/, "Trailing — press higher or bring attackers"],
+    [/^领先，注意控场与体能分配/, "Leading — manage tempo and fitness"],
+    [/^僵持中，可微调节奏寻找突破/, "Stalemate — tweak tempo for a breakthrough"],
+    [/^首发平均体能/, "XI avg fitness "],
+    [/^名主力体能告急，建议换人/, " starters low on fitness — consider subs"],
+    [/^比分胶着，最后 15 分钟是关键窗口/, "Tight score — last 15 is decisive"],
+    [/^仅落后 1 球，可冒险压上/, "One goal down — risk going forward"],
+    [/^守住优势，别急于冒进/, "Protect the lead — don't overcommit"],
+    [/^考虑轮换/, "consider rotation"],
+    [/^📋 中场调整：/, "📋 HT tweak: "],
+    [/^两黄变一红/, "Second yellow → red"],
+    [/^红牌/, "Red card"],
+    [/^停赛/, "suspended"],
+    [/^赛季黄牌/, "season yellows"],
   ];
   for (const [re, rep] of map) {
     s = s.replace(re, rep);
@@ -5676,28 +5674,28 @@ function renderCareer() {
   el.innerHTML = `
     <div class="grid-2">
       <div class="card">
-        <h2 data-i18n="career.manager">${getLang() === "en" ? "Manager career" : "缁忕悊鐢熸动"}</h2>
-        <p><strong>${escapeHtml(world.managerName)}</strong> 路 ${escapeHtml(club.name)}</p>
+        <h2 data-i18n="career.manager">${getLang() === "en" ? "Manager career" : "经理生涯"}</h2>
+        <p><strong>${escapeHtml(world.managerName)}</strong> · ${escapeHtml(club.name)}</p>
         <ul class="career-stats">
-          <li>${getLang() === "en" ? "Seasons" : "鎵ф暀璧涘"}锛?{mc.seasons}</li>
-          <li>${getLang() === "en" ? "Record" : "鎴樼哗"}锛?{mc.wins}W ${mc.draws}D ${mc.losses}L锛?{mc.matches}锛壜?${wr}%</li>
-          <li>GF/GA锛?{mc.goalsFor || 0} / ${mc.goalsAgainst || 0}</li>
-          <li>${getLang() === "en" ? "Titles / promos / cups" : "鍐犲啗 / 鍗囩骇 / 鏉禌"}锛?{mc.titles} / ${mc.promotions} / ${mc.cups}</li>
-          <li>${getLang() === "en" ? "Sacked" : "琚В闆?}锛?{mc.sacked}</li>
+          <li>${getLang() === "en" ? "Seasons" : "执教赛季"}：${mc.seasons}</li>
+          <li>${getLang() === "en" ? "Record" : "战绩"}：${mc.wins}W ${mc.draws}D ${mc.losses}L（${mc.matches}）· ${wr}%</li>
+          <li>GF/GA：${mc.goalsFor || 0} / ${mc.goalsAgainst || 0}</li>
+          <li>${getLang() === "en" ? "Titles / promos / cups" : "冠军 / 升级 / 杯赛"}：${mc.titles} / ${mc.promotions} / ${mc.cups}</li>
+          <li>${getLang() === "en" ? "Sacked" : "被解雇"}：${mc.sacked}</li>
           <li>${
             mc.bestFinish
-              ? `${getLang() === "en" ? "Best" : "鏈€浣?}锛?{mc.bestFinish.season} ${escapeHtml(mc.bestFinish.divName)} #${mc.bestFinish.pos}`
+              ? `${getLang() === "en" ? "Best" : "最佳"}：${mc.bestFinish.season} ${escapeHtml(mc.bestFinish.divName)} #${mc.bestFinish.pos}`
               : getLang() === "en"
-                ? "Best finish: 鈥?
-                : "鏈€浣冲悕娆★細鈥?
+                ? "Best finish: —"
+                : "最佳名次：—"
           }</li>
         </ul>
-        <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">${getLang() === "en" ? "Trophy cabinet" : "鑽ｈ獕鏌?}</h3>
-        <div class="honor-list">${trophies || `<p class="muted">${getLang() === "en" ? "No trophies yet" : "鏆傛棤濂栨澂"}</p>`}</div>
+        <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">${getLang() === "en" ? "Trophy cabinet" : "荣誉柜"}</h3>
+        <div class="honor-list">${trophies || `<p class="muted">${getLang() === "en" ? "No trophies yet" : "暂无奖杯"}</p>`}</div>
       </div>
       <div class="card">
-        <h2 data-i18n="career.club">${getLang() === "en" ? "Club honours" : "淇变箰閮ㄨ崳瑾夊"}</h2>
-        <div class="honor-list">${clubHonors || `<p class="muted">${getLang() === "en" ? "Win a title or promote to fill the wall" : "澶哄啝鎴栧崌绾у悗鍐欏叆姝ゅ"}</p>`}</div>
+        <h2 data-i18n="career.club">${getLang() === "en" ? "Club honours" : "俱乐部荣誉墙"}</h2>
+        <div class="honor-list">${clubHonors || `<p class="muted">${getLang() === "en" ? "Win a title or promote to fill the wall" : "夺冠或升级后写入此处"}</p>`}</div>
       </div>
     </div>
   `;
@@ -5711,16 +5709,16 @@ function maybeShowSeasonSummary() {
   if (!overlay) return;
   world._summaryShownSeason = s.season;
   const trop = (s.trophies || [])
-    .map((t) => `<li>${escapeHtml(t.title)}${t.detail ? ` 路 ${escapeHtml(t.detail)}` : ""}</li>`)
+    .map((t) => `<li>${escapeHtml(t.title)}${t.detail ? ` · ${escapeHtml(t.detail)}` : ""}</li>`)
     .join("");
   overlay.innerHTML = `
     <div class="season-summary-card">
-      <h2>馃弳 ${s.season} ${getLang() === "en" ? "Season review" : "璧涘缁撶畻"}</h2>
-      <p class="muted">${escapeHtml(s.clubName)} 路 ${escapeHtml(s.divName)}</p>
-      <p style="font-size:1.35rem;margin:0.5rem 0"><strong>#${s.pos}</strong> 路 ${s.pts} pts 路 ${s.w}W ${s.d}D ${s.l}L 路 ${s.gf}:${s.ga}</p>
-      ${trop ? `<ul class="season-trop-list">${trop}</ul>` : `<p class="muted">${getLang() === "en" ? "No new silverware" : "鏈鏃犳柊濂栨澂"}</p>`}
-      <p class="muted" style="margin-top:0.75rem">${getLang() === "en" ? "Career" : "鐢熸动"}锛?{s.career?.seasons || 0} seasons 路 ${s.career?.titles || 0} titles 路 ${s.career?.promotions || 0} promos</p>
-      <button type="button" class="btn primary" id="btn-close-season-summary">${getLang() === "en" ? "Continue" : "缁х画"}</button>
+      <h2>🏆 ${s.season} ${getLang() === "en" ? "Season review" : "赛季结算"}</h2>
+      <p class="muted">${escapeHtml(s.clubName)} · ${escapeHtml(s.divName)}</p>
+      <p style="font-size:1.35rem;margin:0.5rem 0"><strong>#${s.pos}</strong> · ${s.pts} pts · ${s.w}W ${s.d}D ${s.l}L · ${s.gf}:${s.ga}</p>
+      ${trop ? `<ul class="season-trop-list">${trop}</ul>` : `<p class="muted">${getLang() === "en" ? "No new silverware" : "本季无新奖杯"}</p>`}
+      <p class="muted" style="margin-top:0.75rem">${getLang() === "en" ? "Career" : "生涯"}：${s.career?.seasons || 0} seasons · ${s.career?.titles || 0} titles · ${s.career?.promotions || 0} promos</p>
+      <button type="button" class="btn primary" id="btn-close-season-summary">${getLang() === "en" ? "Continue" : "继续"}</button>
     </div>
   `;
   overlay.classList.remove("hidden");
@@ -5742,8 +5740,8 @@ function checkExportReminder() {
       tip.classList.remove("hidden");
       tip.textContent =
         getLang() === "en"
-          ? "Tip: export your save regularly 鈥?clearing cache wipes progress."
-          : "鎻愰啋锛氬缓璁畾鏈熷鍑哄瓨妗ｏ紱娓呯紦瀛樹細涓㈠け杩涘害銆?;
+          ? "Tip: export your save regularly — clearing cache wipes progress."
+          : "提醒：建议定期导出存档；清缓存会丢失进度。";
     } else {
       tip.classList.add("hidden");
     }
@@ -5776,7 +5774,7 @@ function sleep(ms) {
 
 function toast(msg) {
   const hint = $("#start-hint");
-  // 涓荤晫闈㈢敤涓存椂鎻愮ず
+  // 主界面用临时提示
   let el = $("#toast");
   if (!el) {
     el = document.createElement("div");
@@ -5806,15 +5804,15 @@ window.addEventListener("vc-prefs-change", () => {
 initStart();
 
 /**
- * 鍒锋柊椤甸潰鍚庤嚜鍔ㄨ妗ｏ細鏈夊綋鍓嶆Ы瀛樻。鍒欑洿鎺ヨ繘涓荤晫闈?
- * 锛堝惁鍒欐瘡娆″埛鏂伴兘浼氬仠鍦ㄥ紑濮嬮〉锛屽儚銆屾病璁颁綇杩涘害銆嶏級
- * URL 鍔??menu=1 鍙己鍒跺仠鍦ㄥ紑濮嬮〉锛堜緥濡傝鎹㈡。 / 瀵煎嚭锛?
+ * 刷新页面后自动读档：有当前槽存档则直接进主界面
+ * （否则每次刷新都会停在开始页，像「没记住进度」）
+ * URL 加 ?menu=1 可强制停在开始页（例如要换档 / 导出）
  */
 function tryAutoResume() {
   try {
     const params = new URLSearchParams(location.search || "");
     if (params.get("menu") === "1" || params.get("noload") === "1") return false;
-    // session 鍐呬富鍔ㄥ洖鑿滃崟锛氬悓涓€浼氳瘽鍒锋柊浠嶈嚜鍔ㄨ锛涗粎褰撳甫 menu=1 鏃跺仠鑿滃崟
+    // session 内主动回菜单：同一会话刷新仍自动读；仅当带 menu=1 时停菜单
     const slot = getActiveSlot();
     if (!hasSave(slot)) return false;
     const data = loadGame(slot);
@@ -5822,12 +5820,12 @@ function tryAutoResume() {
     world = data;
     migrateWorld(world);
     enterMain();
-    // 杞绘彁绀猴紝閬垮厤璇互涓鸿繕鍦ㄧ櫥褰曢〉
+    // 轻提示，避免误以为还在登录页
     const msg =
       getLang() === "en"
         ? `Resumed slot ${slot}`
-        : `宸茶嚜鍔ㄨ鍙栨Ы ${slot}`;
-    // enterMain 鍚?start 灞忓凡闅愯棌锛宼oast 浠嶅彲鐢?
+        : `已自动读取槽 ${slot}`;
+    // enterMain 后 start 屏已隐藏，toast 仍可用
     setTimeout(() => toast(msg), 80);
     return true;
   } catch (err) {
@@ -5837,5 +5835,4 @@ function tryAutoResume() {
 }
 
 tryAutoResume();
-
 

@@ -343,8 +343,7 @@ export class MatchView {
         }
       }
     }
-    // 表现层叠人轻分离（角球禁区多推一轮）
-    this._visualUnstack(isCornerState ? 2 : 1);
+    // sim 已在逻辑层完成分离。这里不能再改坐标，否则下一帧会被真实位置拉回而产生抖动。
 
     if (carrier) {
       this.carrier = carrier;
@@ -722,6 +721,14 @@ export class MatchView {
   _tickDirector(sp, nowTs, realDt) {
     if (!sp) return;
     const now = nowTs || performance.now();
+
+    // 自动重播已经截成 7.5s 精华段，不再叠加一次进球导演慢镜。
+    if (sp.label === "replay") {
+      sp.rateMul = 1;
+      sp.directorPhase = "replay";
+      this.camMode = "follow";
+      return;
+    }
 
     // 1) 事件触发的慢镜（墙钟）
     let eventMul = 1;
@@ -2517,7 +2524,8 @@ export class MatchView {
     for (const pl of drawList) {
       const x = px(pl.x);
       const y = py(pl.y);
-      const r = Math.max(9, minDim * 0.028);
+      // 与模拟层 2.85~3.35 的中心间距匹配；旧半径 9px 会让直径大于碰撞距离。
+      const r = clamp(minDim * 0.022, 6, 8);
       const spd = Math.hypot(pl.vx || 0, pl.vy || 0);
       const dim =
         focusOn && !this.focusIds.has(pl.id) && !pl.el.classList.contains("has-ball");
@@ -4747,19 +4755,39 @@ export class MatchView {
     this.setFmmReplayChrome(true, { lang });
     this.setFmmTicker(en ? "▶ Goal replay" : "▶ 进球重播", "replay", 0);
     this._fmmReplay.skip = false;
-    // 从高潮前截一段，全场跟镜
-    const climax = opts.climaxAt ?? this._lastTimeline?.climaxAt;
-    let slice = frames;
-    if (climax != null) {
-      const t0 = climax - 14;
-      const t1 = climax + 6;
-      slice = frames.filter((f) => {
-        const t = f.t ?? 0;
-        return t >= t0 && t <= t1;
+    this.fieldEl?.classList.remove("mp-replay-slow");
+    // 只重播最后传球/射门/入网，墙钟控制在约 7~9s。
+    const rawClimax = opts.climaxAt ?? this._lastTimeline?.climaxAt;
+    const requestedClimax = rawClimax == null ? NaN : Number(rawClimax);
+    const firstT = Number(frames[0]?.t) || 0;
+    const lastT = Number(frames[frames.length - 1]?.t) || firstT;
+    const netFrame = frames.find((f) => f.ball?.netHit);
+    const netT = Number(netFrame?.t);
+    const inferredClimax = Number.isFinite(netT)
+      ? netT
+      : lastT - Math.min(2, Math.max(0, lastT - firstT) * 0.2);
+    const climax = Number.isFinite(requestedClimax) ? requestedClimax : inferredClimax;
+    const t0 = climax - 5.5;
+    const t1 = climax + 2;
+    let slice = frames.filter((f) => {
+      const t = Number(f.t);
+      return Number.isFinite(t) && t >= t0 && t <= t1;
+    });
+    if (slice.length < 4) {
+      // 时间戳缺失/稀疏时也只取高潮附近的小段，绝不退化成整段重播。
+      let nearest = frames.length - 1;
+      let nearestDelta = Infinity;
+      frames.forEach((f, i) => {
+        const t = Number(f.t);
+        const delta = Number.isFinite(t) ? Math.abs(t - climax) : Infinity;
+        if (delta < nearestDelta) {
+          nearest = i;
+          nearestDelta = delta;
+        }
       });
-      if (slice.length < 4) slice = frames;
+      slice = frames.slice(Math.max(0, nearest - 55), Math.min(frames.length, nearest + 21));
     }
-    const getSpeed = opts.getSpeed || (() => 0.7);
+    const getSpeed = opts.getSpeed || (() => 1);
     const isPaused = () => {
       if (this._fmmReplay?.skip) {
         this.stopSimTimeline();
@@ -4767,18 +4795,26 @@ export class MatchView {
       }
       return !!(opts.isPaused?.());
     };
+    // 最后的墙钟保险：低帧率或异常时间戳也不能让自动重播拖到几十秒。
+    const hardStop = setTimeout(() => {
+      if (this._fmmReplay?.active && this._simPlay?.label === "replay") {
+        this.stopSimTimeline();
+      }
+    }, 9500);
     try {
       await this.playSimTimeline(slice, {
         getSpeed,
         isPaused,
-        rate: 0.85,
-        label: "goal",
+        rate: 1.15,
+        label: "replay",
         climaxAt: climax,
         fmmWide: true,
         onSimT: opts.onSimT || null,
       });
     } catch (_) {
       /* ignore */
+    } finally {
+      clearTimeout(hardStop);
     }
     this.setFmmReplayChrome(false, { lang });
     this.setFmmTicker("", "", 0);
@@ -5464,7 +5500,9 @@ export class MatchView {
             setTimeout(() => scorer.el.classList.remove("scorer", "highlight"), 2200);
           }
           this.setBanner("⚽ GOAL!", "goal");
-          this.setCaption(ev.text || "GOAL", "goal", 2200);
+          // 进球只保留中央主提示 + 底栏事件文案；不再把同一句话复制到场内字幕。
+          this.setCaption("");
+          this.setFmmTicker(ev.text || "GOAL", "goal", 1800);
           this.playSfx("goal");
           this.playSfx("cheer");
           setTimeout(() => this.setBanner(""), 1800);
@@ -6428,13 +6466,11 @@ export class MatchView {
       cornerX,
       attHome,
     };
-    // 射手立刻往角旗半拉，保证画面立刻有「冲过去」感
-    scorer.x = clamp(lerp(scorer.x, cornerX, 0.35), 6, 94);
-    scorer.y = clamp(lerp(scorer.y, attHome ? 10 : 90, 0.4), 5, 95);
+    // 只设置移动目标，不改写当前位置。
     scorer.tx = cornerX;
     scorer.ty = attHome ? 8 : 92;
     scorer.el.classList.add("highlight", "scorer");
-    // 近端队友优先围拢：先半瞬移再跑，5–7 人必须明显靠拢
+    // 仅四名近端队友自然围拢；加上射手一共最多五人。
     const mates = this.players
       .filter(
         (p) =>
@@ -6449,8 +6485,8 @@ export class MatchView {
           Math.hypot(b.x - scorer.x, b.y - scorer.y)
       );
     mates.forEach((pl, i) => {
-      if (i < 7) {
-        const ang = (i / 7) * Math.PI * 2 + 0.4;
+      if (i < 4) {
+        const ang = (i / 4) * Math.PI * 2 + 0.4;
         const ring = 3.2 + (i % 3) * 1.4;
         const tx = clamp(
           scorer.x + Math.cos(ang) * ring + (cornerX - 50) * 0.12,
@@ -6462,30 +6498,25 @@ export class MatchView {
           5,
           95
         );
-        // 立刻拉近 55%，肉眼可见「围上来」
-        pl.x = clamp(lerp(pl.x, tx, 0.55), 5, 95);
-        pl.y = clamp(lerp(pl.y, ty, 0.55), 4, 96);
         pl.tx = tx;
         pl.ty = ty;
         pl.el.classList.add("highlight");
       } else {
-        pl.tx = clamp(lerp(pl.x, scorer.x, 0.4), 8, 92);
-        pl.ty = clamp(lerp(pl.y, scorer.y, 0.4), 8, 92);
+        pl.tx = pl.x;
+        pl.ty = pl.y;
       }
       this._applyPlayer(pl);
     });
     this._applyPlayer(scorer);
-    // 失球方明显后撤
+    // 失球方自然后撤，也不在事件帧内改写坐标。
     for (const pl of this.players) {
       if (pl.team === team || pl.pos === "GK") continue;
       pl.tx = clamp(pl.baseX * 0.5 + 50 * 0.5, 10, 90);
       pl.ty = clamp(pl.baseY * 0.55 + 50 * 0.45, 14, 86);
-      pl.x = lerp(pl.x, pl.tx, 0.2);
-      pl.y = lerp(pl.y, pl.ty, 0.2);
       this._applyPlayer(pl);
     }
     this._setFocus(
-      [scorer, ...mates.slice(0, 5)].filter(Boolean),
+      [scorer, ...mates.slice(0, 4)].filter(Boolean),
       4500
     );
     const nm = scorer.name || scorer.player?.name || "";
@@ -6509,20 +6540,25 @@ export class MatchView {
       return;
     }
     const scorer = this.players.find((p) => p.id === c.scorerId);
-    // 更快聚拢
-    const k = 1 - Math.pow(0.04, Math.max(0.016, dt));
+    // 以单位/秒限制步长，避免远距离目标在首帧形成视觉跳跃。
     for (const pl of this.players) {
       if (pl.el.classList.contains("sent-off")) continue;
       const tx = pl.tx ?? pl.x;
       const ty = pl.ty ?? pl.y;
       const speed =
         scorer && pl.id === scorer.id
-          ? k * 1.55
+          ? 5.8
           : pl.team === c.team
-            ? k * 1.25
-            : k * 0.5;
-      pl.x = lerp(pl.x, tx, clamp(speed, 0, 1));
-      pl.y = lerp(pl.y, ty, clamp(speed, 0, 1));
+            ? 4.6
+            : 2.2;
+      const dx = tx - pl.x;
+      const dy = ty - pl.y;
+      const distance = Math.hypot(dx, dy);
+      const step = Math.min(distance, speed * Math.max(0.016, dt));
+      if (distance > 1e-6) {
+        pl.x += (dx / distance) * step;
+        pl.y += (dy / distance) * step;
+      }
       if (Math.hypot(tx - pl.x, ty - pl.y) > 0.4) {
         pl.heading = Math.atan2(ty - pl.y, tx - pl.x);
       }
@@ -6640,7 +6676,7 @@ export class MatchView {
     return { gx: clamp(gx, 42, 58), gy: clamp(gy, 0.6, 99.4) };
   }
 
-  /** 进球入网特效：永久球门网撞击 + 大块网纹 + 光环 + 全场闪 */
+  /** 进球入网特效：球门网撞击 + 网纹 + 球门区域轻闪 */
   _goalNetEffect(gx, gy, attHome) {
     this._burst(gx, gy, "goal");
     // 永久球门口“被撞凹”再回弹
@@ -6653,13 +6689,13 @@ export class MatchView {
       mouth.classList.add("mp-goal-mouth-hit");
       setTimeout(() => mouth.classList.remove("mp-goal-mouth-hit"), 1000);
     }
-    // 全场一瞬绿闪（指向球门端）
+    // 球门端轻闪；CSS 已限制范围和透明度。
     if (this.fieldEl) {
       this.fieldEl.style.setProperty("--goal-flash-y", attHome ? "6%" : "94%");
       this.fieldEl.classList.remove("mp-goal-flash");
       void this.fieldEl.offsetWidth;
       this.fieldEl.classList.add("mp-goal-flash");
-      setTimeout(() => this.fieldEl?.classList.remove("mp-goal-flash"), 600);
+      setTimeout(() => this.fieldEl?.classList.remove("mp-goal-flash"), 350);
     }
     if (!this.fxLayer) return;
     // 大块球网涟漪（比旧版更大更久）

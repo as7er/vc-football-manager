@@ -2643,7 +2643,7 @@ html[data-theme="dark"] .mp-fmm-dock {
   68% { transform: scale(0.96, 1.15); }
   100% { transform: scale(1, 1); filter: brightness(1); }
 }
-/* 全场一瞬绿闪 */
+/* 入网轻闪：只提示球门区域，避免整块球场被颜色遮住。 */
 .mp-field.mp-goal-flash::after {
   content: "";
   position: absolute;
@@ -2651,12 +2651,12 @@ html[data-theme="dark"] .mp-fmm-dock {
   z-index: 12;
   pointer-events: none;
   background: radial-gradient(
-    ellipse 55% 40% at 50% var(--goal-flash-y, 8%),
-    rgba(74, 222, 128, 0.55) 0%,
-    rgba(74, 222, 128, 0.18) 35%,
-    transparent 70%
+    ellipse 34% 22% at 50% var(--goal-flash-y, 8%),
+    rgba(74, 222, 128, 0.16) 0%,
+    rgba(74, 222, 128, 0.05) 32%,
+    transparent 58%
   );
-  animation: mp-goal-flash 0.55s ease-out forwards;
+  animation: mp-goal-flash 0.32s ease-out forwards;
 }
 @keyframes mp-goal-flash {
   0% { opacity: 0; }
@@ -2817,6 +2817,11 @@ html[data-theme="dark"] .mp-fmm-dock {
 .mp-field.mp-replay-slow::after {
   content: "SLOW-MO";
   position: absolute;
+  /* 与 mp-goal-flash 共存时，必须清掉其 inset:0；否则小徽章会被拉成全场紫色遮罩。 */
+  left: auto;
+  bottom: auto;
+  width: auto;
+  height: auto;
   top: 36px;
   right: 8px;
   z-index: 13;

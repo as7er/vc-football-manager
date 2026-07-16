@@ -1,7 +1,7 @@
 /**
  * SimEngine → match.js 适配层（P5）
  *
- * 用户场次：空间模拟跑完全时段 → scaledResult 映射真实量级 →
+ * 用户场次：空间模拟跑完全时段 → directResult 读取真实事件 →
  * 翻译成现有 {minute,type,text,playerId,...} 事件，继续走报告/评分/积分。
  *
  * AI 后台场次仍用 match.js 概率引擎（性能）。
@@ -78,7 +78,10 @@ export function resyncSimAfterHalfTime(state) {
       }
       a.fitness = p.fitness ?? 100;
       const attrs = p.attrs || {};
-      const n = (v) => Math.max(0.05, Math.min(1, (v ?? 10) / 20));
+      const n = (v) => {
+        const raw = Math.max(0.05, Math.min(1, (v ?? 10) / 20));
+        return Math.max(0.3, Math.min(0.92, 0.28 + raw * 0.64));
+      };
       a.attr = {
         pace: n(attrs.pace),
         accel: n(attrs.pace) * 0.6 + n(attrs.strength) * 0.4,
@@ -152,7 +155,9 @@ export function runSimPeriodRaw(eng, fromMin, toMin, opts = {}) {
     frames.push(compactSimFrame(eng));
   }
 
-  const scaled = eng.scaledResult({ tMin: tStart, tMax: tEnd });
+  // 原始模拟已经校准到可观看量级；比分和高光必须来自同一批空间事件。
+  // 变量名 scaled 暂留以兼容 match.js 既有接口，内容已是 direct result。
+  const scaled = eng.directResult({ tMin: tStart, tMax: tEnd });
   const raw = eng.events.filter((e) => e.t > tStart && e.t <= tEnd);
   const flavor = pickFlavorEvents(raw, fromMin, toMin);
   return { scaled, flavor, tStart, tEnd, steps: guard, frames };
@@ -237,14 +242,15 @@ export function buildHighlightWindows(opts = {}) {
   const goals = opts.scaledGoals || [];
   const windows = [];
 
-  // 进球：更长推进窗（助攻起脚 ~6s + 射门 + 庆祝聚拢 + 中圈开球）
+  // 进球：只保留最后一段组织 + 入网 + 庆祝起步。
+  // 旧窗口最长 44s，叠加自动重播后单球会占约 100s 墙钟。
   for (const g of goals) {
     const t = g.t != null ? g.t : (g.minute || 1) * 60;
-    // 有助攻时再多留 6s 起脚/传球，回放叙事更完整
-    const lead = g.assistId ? 28 : 22;
+    const lead = g.assistId ? 10 : 8;
     windows.push({
       t0: Math.max(tStart, t - lead),
-      t1: Math.min(tEnd, t + 16),
+      // 庆祝结束前切出，避免把引擎规则层的瞬时开球复位展示给观众。
+      t1: Math.min(tEnd, t + 6),
       priority: 100,
       label: "goal",
       at: t,
@@ -304,7 +310,8 @@ export function buildHighlightWindows(opts = {}) {
       continue;
     }
     windows.push({
-      t0: Math.max(tStart, e.t - 2),
+      // 从摆位完成的事件帧开始，避免把规则层瞬时重排展示成全队跳位。
+      t0: Math.max(tStart, e.t),
       // 摆位顿 + 开出 + 禁区争夺
       t1: Math.min(tEnd, e.t + 12),
       priority: 42,

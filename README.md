@@ -40,10 +40,13 @@
 - **联赛**：超联 / 甲级 / 乙级，升降级 + **VCFM 杯**
 - **俱乐部浏览器**：积分榜 / 赛程 / 数据榜点队名，或「俱乐部」页筛选搜索
 - **比赛日（空间模拟 + FMM 风表现）**
-  - **用户场**：`SimEngine` 10Hz 空间模拟（持球决策、无球跑位、防守压迫、越位/死球）→ 结果缩放写入报告与积分
+  - **用户场**：`SimEngine` 10Hz 空间模拟（持球决策、无球跑位、防守压迫、越位/死球）→ 真实空间事件直接写入比分、报告与积分
   - **直播**：半场预跑后按 **高光窗口** 细看（进球 / 射门 / 扑救等），平淡段短跳，整场约十分钟量级墙钟
   - **真空间投影**：录帧 + 插值，俯视球场画布；主客 **同一套跑位 AI**（非单方面）
   - 跑位包括：前锋回撤接应、**边锋回撤拿球内切** 射/传、边后卫前插传中、中场前插与远射
+  - **球队协同**：统一上抢职责与球权稳定窗；边锋保持宽度、中场分通道接应，减少围球与连续反抢
+  - **完整越位快照**：按队友出脚瞬间记录球、防线和越位球员；定位球首脚按规则豁免
+  - **紧凑进球流程**：短高光、最长 9.5 秒自动回放、自然庆祝；比分与画面使用同一批空间事件
   - **核心球员**（主客各可有一名）：梅西 / C 罗式进攻绝对权——更爱拿球盘带射门，队友更愿意喂球；未指定时开赛自动选进攻最强者
   - 广播计分板、实时 **xG / 控球 / 射门**、轻量音效、进球撞网与助攻回放
   - **赛前简报**、中场换人换阵、赛后 MOTM / 评分；赛程可回看旧战报
@@ -130,10 +133,13 @@ Repo: https://github.com/as7er/vcfm
 - **Leagues**: three tiers with promotion/relegation + **VCFM Cup**
 - **Club browser**: click names on the table / fixtures / stats, or use the **Clubs** tab
 - **Matchday (spatial sim + FMM-style presentation)**
-  - **User matches**: 10Hz `SimEngine` (on-ball decisions, off-ball runs, pressing, offside/restarts) → scaled results into reports & table
+  - **User matches**: 10Hz `SimEngine` (on-ball decisions, off-ball runs, pressing, offside/restarts) → spatial events directly drive score, reports, and table
   - **Live**: half pre-simulated, then **highlight windows** (goals / shots / saves) with short skips — full match roughly ~10 minutes wall-clock
   - **True spatial projection**: recorded frames + interpolation on a top-down canvas; **same AI for both teams**
   - Movement: strikers drop to link, **wingers drop & cut inside** to shoot/pass, fullbacks overlap/cross, midfield runs & long shots
+  - **Team coordination**: one coordinated presser, possession-stability windows, wide wingers, and lane-based midfield support
+  - **Kick-time offside snapshots**: ball, defensive line, and offside attackers are frozen at the teammate's touch; restart exemptions follow the laws
+  - **Compact goal flow**: short highlights, auto replays capped at 9.5 seconds, and natural celebrations; score and visuals share one spatial event source
   - **Core player** (one per side): Messi/Ronaldo-style attack rights — more touches, dribbles, shots; teammates feed them. Auto-picked if unset
   - Scoreboard, live **xG / possession / shots**, light SFX, goal net FX & assist replays
   - Pre-match briefing, HT changes, MOTM / ratings; rewatch past reports from fixtures

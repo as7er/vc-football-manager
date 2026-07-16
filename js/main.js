@@ -4284,58 +4284,9 @@ function handleSimLiveEvent(ev, snap) {
     if (matchView) {
       if (snap?.sim) matchView.applySimSnapshot(snap.sim);
       const lang = getLang();
-      const en = lang === "en";
-      const homeId = fixture?.home || matchView.home?.id;
-      const attHome = ev.teamId === homeId;
-      const teamShort =
-        (attHome
-          ? matchView.home?.short || matchView.home?.name
-          : matchView.away?.short || matchView.away?.name) || (attHome ? "HOME" : "AWAY");
-      const scorerName =
-        matchView.players?.find((p) => p.id === ev.playerId)?.name ||
-        ev.playerName ||
-        "";
-      // FMM 文案链：助攻 → 射门 → 入球了!!
-      const assisterName =
-        (ev.assistId &&
-          matchView.players?.find((p) => p.id === ev.assistId)?.name) ||
-        "";
-      if (assisterName && scorerName) {
-        matchView.setFmmTicker?.(
-          en
-            ? `${assisterName} to ${scorerName}…`
-            : `${assisterName} 直塞 ${scorerName}…`,
-          "shot",
-          900
-        );
-        setTimeout(() => {
-          if (!matchView?._built) return;
-          matchView.setFmmTicker?.(
-            en ? `${scorerName} shoots!` : `${scorerName} 射门!`,
-            "shot",
-            800
-          );
-        }, 700);
-      } else if (scorerName) {
-        matchView.setFmmTicker?.(
-          en ? `${scorerName} shoots!` : `${scorerName} 射门!`,
-          "shot",
-          900
-        );
-      }
-      // 导演：内含 3s 助攻→射门→入网叙事 + 庆祝（勿在外面再提前撞网）
-      matchView.triggerDirectorMoment?.("goal", { ev, fixture, lang, attHome });
+      // 一粒进球只走一次 onEvent 横幅/字幕/音效；不再叠加助攻、射门、入球、庆祝四组定时文案。
       matchView.onEvent(ev, snap, fixture);
-      // 主文案：入球了!!（对照 FMM）—— 对齐叙事入网站点
-      setTimeout(() => {
-        matchView?.setFmmTicker?.(
-          en ? `${teamShort} scores!!` : `${teamShort} 入球了!!`,
-          "goal",
-          0
-        );
-      }, 2200);
-      // hold 盖住整段叙事(~2.6s) + 庆祝起步
-      const goalHold = 3400 / Math.min(spd, 1.25);
+      const goalHold = 650 / Math.min(spd, 1.25);
       matchView.holdSimTimeline?.(goalHold);
       matchPlayback.pendingGoalReplay = {
         lang,
@@ -4343,22 +4294,6 @@ function handleSimLiveEvent(ev, snap) {
         frames: matchView._lastTimeline?.frames || null,
         climaxAt: matchView._lastTimeline?.climaxAt ?? null,
       };
-      setTimeout(() => {
-        if (!matchView?._built) return;
-        matchView.fieldEl?.classList.remove("mp-replay-slow");
-        matchView.setCaption?.(
-          en ? "Teammates celebrate…" : "队友围上来庆祝…",
-          "goal",
-          2200
-        );
-      }, goalHold + 40);
-      setTimeout(() => {
-        if (!matchView?._built) return;
-        matchView.setBanner?.("");
-        if (matchView.phase === "goal") matchView.phase = "play";
-        matchView._celebrate = null;
-        matchView._goalBeat = null;
-      }, goalHold + 4800 / Math.min(spd, 1.25));
     }
     return;
   }
@@ -4544,7 +4479,8 @@ async function playHighlightPlanBridge(spec) {
             frames: pr.frames || seg.frames,
             climaxAt: pr.climaxAt != null ? pr.climaxAt : seg.at,
             sleepFn: sleepPlayback,
-            getSpeed: () => Math.min(0.8, Math.max(0.4, getSpeed() * 0.7)),
+            // 自动重播不是二次慢镜：×1 约 6.5s，低速档也封在约 8s。
+            getSpeed: () => Math.min(1.25, Math.max(0.8, getSpeed())),
             isPaused: () => !!(matchPlayback.paused || matchView._fmmReplay?.skip),
           });
         } catch (e) {
@@ -6540,4 +6476,3 @@ function tryAutoResume() {
 }
 
 tryAutoResume();
-

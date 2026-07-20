@@ -704,6 +704,41 @@ export class SimEngine {
       return;
     }
 
+    // —— 人墙任意球主罚：按 _restart 制定的计划执行 ——
+    // 直接射门吃现有人墙封堵/门将扑救；否则吊传禁区抢点（不豁免越位，规则如此）。
+    // 直接调 _shoot 绕过全队射门冷却：定位球是常规进攻节奏之外的额外机会。
+    if (
+      b.restartType === "freekick" &&
+      b.owner === a.id &&
+      a._fkPlan &&
+      this.t < (a._fkPlanUntil || 0)
+    ) {
+      const plan = a._fkPlan;
+      a._fkPlan = null;
+      b.restartType = null;
+      if (plan === "shoot") {
+        a.shotCdUntil = this.t + 1.2;
+        this._shoot(a, { freekick: true });
+        return;
+      }
+      const fkBoxY = a.team === "home" ? 14 : 86;
+      const cross = this._bestCross(a);
+      this._pass(
+        a,
+        cross
+          ? { ...cross, cross: true }
+          : {
+              agent: null,
+              value: 1,
+              through: false,
+              cross: true,
+              tx: clamp(50 + (Math.random() - 0.5) * 12, 40, 60),
+              ty: clamp(fkBoxY + (Math.random() - 0.5) * 6, 8, 92),
+            }
+      );
+      return;
+    }
+
     const goalY = this.targetGoalY(a.team);
     const goalX = 50;
     const dGoal = dist(a.x, a.y, goalX, goalY);
@@ -1222,6 +1257,7 @@ export class SimEngine {
     b.offsideExemptRestart = false;
     b.restartType = null;
     b.isThroughPass = isThrough;
+    b.isCrossPass = isCross; // 高弧线传中：z 超过头顶时不可拦截/接管（见 _resolvePossession）
     b.state = "pass";
     if (passTo.agent) {
       passTo.agent.intent = {
@@ -1255,7 +1291,7 @@ export class SimEngine {
   }
 
   /** 执行射门：给球高速飞向球门，门将可扑（远射：更吃 shooting、误差更大） */
-  _shoot(a) {
+  _shoot(a, extraMeta = null) {
     const b = this.ball;
     const goalY = this.targetGoalY(a.team);
     const dGoal = dist(a.x, a.y, 50, goalY);
@@ -1339,6 +1375,7 @@ export class SimEngine {
       x: a.x,
       y: a.y,
       distance: dGoal,
+      ...(extraMeta || {}),
     });
     a.noReclaimUntil = this.t + 0.4;
   }
@@ -2245,7 +2282,10 @@ export class SimEngine {
     // 只要有对手足够贴近球的当前位置，就按 tackling/positioning 概率抢截下来。
     if (b.state === "pass" && !b.owner) {
       const flown = (b.kickX != null) ? dist(b.x, b.y, b.kickX, b.kickY) : 999;
-      if (flown >= 6) { // 传球早段仍受保护（防贴脸截断/乒乓），飞出一段后才可拦
+      // 传中球飞在头顶以上（z>2.2 ≈ 起跳争顶极限）时物理上够不着——
+      // 不加这条，吊过人墙/人堆头顶的球会被"原地吃掉"，传中永远到不了禁区。
+      const overhead = b.isCrossPass && b.z > 2.2;
+      if (flown >= 6 && !overhead) { // 传球早段仍受保护（防贴脸截断/乒乓），飞出一段后才可拦
         for (const o of this.agents) {
           // sentOff：离场者（红牌/伤退走向边线途中）绝不能拦截，否则带球离场冻结比赛
           if (o.team === b.kickTeam || o.role === "GK" || o.sentOff) continue;
@@ -2350,6 +2390,10 @@ export class SimEngine {
     // 注意：射门飞行中仍允许近距离争夺（原始行为，否则进球爆炸）；
     // 门将扑救已优先处理。禁区乒乓靠下方「小禁区优先门将」抑制。
 
+    // 传中飞越头顶（z>2.2）时外场球员够不着：让球飞到落点再争，
+    // 否则高弧线会被路径上的人在 2D 距离内"凭空控下"。门将手臂长（3.0）可摘高球。
+    const overheadCross = b.state === "pass" && !!b.isCrossPass;
+
     let best = null;
     let bestD = SIM.CONTROL_RADIUS + speed * 0.04;
     for (const a of this.agents) {
@@ -2357,6 +2401,8 @@ export class SimEngine {
       if (a.sentOff) continue;
       if (a.id === b.lastKicker && this.t < (a.noReclaimUntil || 0)) continue;
       if (oppBlocked && a.team !== b.kickTeam) continue;
+      // 高弧线传中够不着就不能控（外场 2.2 / 门将 3.0）
+      if (overheadCross && b.z > (a.role === "GK" ? 3.0 : 2.2)) continue;
       // 门将只能在本方禁区附近拿自由球（防中场门将"参与传球"）
       if (a.role === "GK") {
         const inBox =
@@ -2829,15 +2875,18 @@ export class SimEngine {
 
     // —— 越过球门线 ——
     // 主队球门在 y≈100，客队球门在 y≈0
+    // 横梁：非射门球（传中/解围等高弧线）过门线时必须低于横梁才算进。
+    // 射门豁免——射门的高度误差已折算进水平误差校准，不能重复惩罚。
+    const underBar = b.state === "shot" || (b.z || 0) < 2.6;
     if (b.y <= 0) {
       // 客队球门线：门框内且是主队打进 → 进球
-      if (b.x > SIM.GOAL_X0 && b.x < SIM.GOAL_X1) return this._goal("home");
+      if (b.x > SIM.GOAL_X0 && b.x < SIM.GOAL_X1 && underBar) return this._goal("home");
       // 门框外出底线：防守方(away)最后碰 = 角球给进攻方(home)；进攻方(home)碰 = 门球给 away
       if (kickTeam === "away") return this._restart("corner", "home", b.x < 50 ? 2 : 98, 4);
       return this._restart("goalkick", "away", 50, 12);
     }
     if (b.y >= 100) {
-      if (b.x > SIM.GOAL_X0 && b.x < SIM.GOAL_X1) return this._goal("away");
+      if (b.x > SIM.GOAL_X0 && b.x < SIM.GOAL_X1 && underBar) return this._goal("away");
       // 防守方(home)最后碰 = 角球给进攻方(away)；进攻方(away)碰 = 门球给 home
       if (kickTeam === "home") return this._restart("corner", "away", b.x < 50 ? 2 : 98, 96);
       return this._restart("goalkick", "home", 50, 88);
@@ -2942,6 +2991,127 @@ export class SimEngine {
     const defendEdgeX = [24, 37, 50, 63, 76];
     const defendEdgeY = [34, 31, 35, 31, 34];
 
+    // —— 人墙任意球（P3 收尾）：按危险度分级摆位 ——
+    // direct：距门近且角度尚可 → 人墙 3-5 人 + 主罚射/传中二选一
+    // cross：进攻三区但射门价值低 → 2 人短墙 + 吊禁区抢点（角球式）
+    // simple：后场/中场 → 沿用轻量重启（快发）
+    let fkClass = null;
+    let fkTaker = null;
+    let fkShootP = 0;
+    const fkWallPos = new Map();
+    const fkAtkSlots = new Map();
+    const fkDefSlots = new Map();
+    if (type === "freekick") {
+      const atkGoalY = this.targetGoalY(restartTeam);
+      const dGoalFk = dist(x, y, 50, atkGoalY);
+      const angFk = clamp(1 - Math.abs(x - 50) / 30, 0, 1);
+      fkClass =
+        dGoalFk < 30 && angFk > 0.25 ? "direct" : dGoalFk < 38 ? "cross" : "simple";
+      if (fkClass !== "simple") {
+        const atkOut = this.agents.filter(
+          (a) => a.team === restartTeam && a.role !== "GK" && !a.sentOff
+        );
+        const defOut = this.agents.filter(
+          (a) => a.team !== restartTeam && a.role !== "GK" && !a.sentOff
+        );
+        // 主罚者：直接任意球看 kicking/shooting，传中型看 passing/kicking
+        const takerScore =
+          fkClass === "direct"
+            ? (p) => 0.5 * p.attr.kicking + 0.35 * p.attr.shooting + 0.15 * p.attr.passing
+            : (p) => 0.55 * p.attr.passing + 0.45 * p.attr.kicking;
+        fkTaker =
+          atkOut
+            .slice()
+            .sort(
+              (a, b) =>
+                takerScore(b) - takerScore(a) ||
+                String(a.id).localeCompare(String(b.id))
+            )[0] || null;
+
+        // 人墙：球→门连线 8.5 处（球贴门线时前压），MID/ATT 站墙让 DEF 留守盯人
+        const wallN =
+          fkClass === "direct" ? (dGoalFk < 18 ? 5 : dGoalFk < 24 ? 4 : 3) : 2;
+        const gvx = 50 - x;
+        const gvy = atkGoalY - y;
+        const gd = Math.hypot(gvx, gvy) || 1;
+        const wallD = Math.min(8.5, Math.max(4, gd - 4));
+        const wcx = x + (gvx / gd) * wallD;
+        const wcy = y + (gvy / gd) * wallD;
+        const perpX = -gvy / gd;
+        const perpY = gvx / gd;
+        const wallPref = (a) => (a.role === "MID" ? 0 : a.role === "ATT" ? 1 : 2);
+        const wallMen = defOut
+          .slice()
+          .sort(
+            (a, b) =>
+              wallPref(a) - wallPref(b) || String(a.id).localeCompare(String(b.id))
+          )
+          .slice(0, wallN);
+        wallMen.forEach((a, i) => {
+          const off = (i - (wallMen.length - 1) / 2) * 1.5;
+          fkWallPos.set(a.id, {
+            x: clamp(wcx + perpX * off, 2, 98),
+            y: clamp(wcy + perpY * off, 2, 98),
+          });
+        });
+
+        // 防守方其余人：复用角球防守槽位盯区，多余的退弧顶外
+        const wallIds = new Set(wallMen.map((a) => a.id));
+        const markers = defOut
+          .filter((a) => !wallIds.has(a.id))
+          .sort((a, b) => {
+            const pa = a.role === "DEF" ? 0 : a.role === "MID" ? 1 : 2;
+            const pb = b.role === "DEF" ? 0 : b.role === "MID" ? 1 : 2;
+            return (
+              pa - pb ||
+              Math.abs(a.baseX - 50) - Math.abs(b.baseX - 50) ||
+              String(a.id).localeCompare(String(b.id))
+            );
+          });
+        markers.slice(0, 5).forEach((a, i) =>
+          fkDefSlots.set(a.id, { x: defendBoxX[i], y: mirrorY(defendBoxY[i]) })
+        );
+        markers.slice(5).forEach((a, i) =>
+          fkDefSlots.set(a.id, {
+            x: defendEdgeX[i % 5],
+            y: mirrorY(defendEdgeY[i % 5]),
+          })
+        );
+
+        // 进攻方抢点：槽位压在防线身后 1.5+（任意球不豁免越位，开球瞬间必须合法）
+        const fkBoxX = [42, 50, 58, 36, 64];
+        const fkBoxY = [15, 17.5, 14, 16, 16];
+        const atkN = fkClass === "direct" ? 3 : 5;
+        const runnerPref = (a) => (a.role === "ATT" ? 0 : a.role === "MID" ? 1 : 2);
+        const runners = atkOut
+          .filter((a) => a !== fkTaker)
+          .sort(
+            (a, b) =>
+              runnerPref(a) - runnerPref(b) ||
+              Math.abs(a.baseX - 50) - Math.abs(b.baseX - 50) ||
+              String(a.id).localeCompare(String(b.id))
+          );
+        runners.slice(0, atkN).forEach((a, i) =>
+          fkAtkSlots.set(a.id, { x: fkBoxX[i], y: mirrorY(fkBoxY[i]) })
+        );
+        runners.slice(atkN, atkN + 2).forEach((a, i) =>
+          fkAtkSlots.set(a.id, { x: i === 0 ? 38 : 62, y: mirrorY(27) })
+        );
+
+        // 主罚计划：越近越正越敢直接射，否则吊传禁区
+        fkShootP =
+          fkClass === "direct"
+            ? clamp(
+                (dGoalFk < 18 ? 0.85 : dGoalFk < 24 ? 0.62 : 0.45) *
+                  (0.45 + 0.55 * angFk),
+                0.1,
+                0.85
+              )
+            : 0;
+      }
+    }
+    const fkSetPiece = fkClass && fkClass !== "simple";
+
     for (const a of this.agents) {
       if (a.sentOff) continue; // 已离场者不参与死球摆位（否则每次重启都被传送回场内）
       a.vx = 0;
@@ -2988,6 +3158,31 @@ export class SimEngine {
         a.ty = a.y;
         a.decisionUntil = this.t + 1.1;
         a.fsm = a.team === restartTeam ? "support" : "home";
+      } else if (type === "freekick" && fkSetPiece) {
+        // —— 人墙任意球摆位：墙/盯区/抢点，其余基准位微调 ——
+        if (a.role === "GK") {
+          a.x = a.baseX;
+          a.y = a.baseY;
+        } else if (fkWallPos.has(a.id)) {
+          const p = fkWallPos.get(a.id);
+          a.x = p.x;
+          a.y = p.y;
+        } else if (fkDefSlots.has(a.id)) {
+          const p = fkDefSlots.get(a.id);
+          a.x = p.x;
+          a.y = p.y;
+        } else if (fkAtkSlots.has(a.id)) {
+          const p = fkAtkSlots.get(a.id);
+          a.x = p.x;
+          a.y = p.y;
+        } else {
+          a.x = clamp(a.baseX + (x - 50) * 0.15, 4, 96);
+          a.y = a.baseY;
+        }
+        a.tx = a.x;
+        a.ty = a.y;
+        a.decisionUntil = this.t + 1.2;
+        a.fsm = a.team === restartTeam ? "support" : "cover";
       } else if (type === "goalkick") {
         if (a.role === "GK") {
           a.x = a.baseX;
@@ -3024,6 +3219,9 @@ export class SimEngine {
     if (type === "corner") {
       taker = cornerTaker;
     }
+    if (type === "freekick" && fkTaker) {
+      taker = fkTaker;
+    }
     if (!taker) taker = this._nearestOf(restartTeam, x, y);
     if (taker) {
       taker.x = x;
@@ -3031,8 +3229,8 @@ export class SimEngine {
       taker.tx = taker.x;
       taker.ty = taker.y;
       b.owner = taker.id;
-      // 角球：多顿一会儿让观众看清摆位，再开出
-      const pause = type === "corner" ? 1.6 : 0.7;
+      // 角球/人墙任意球：多顿一会儿让观众看清摆位，再开出
+      const pause = type === "corner" ? 1.6 : fkSetPiece ? 2.2 : 0.7;
       taker.decisionUntil = this.t + pause;
       taker.protectUntil = this.t + pause + 0.3;
       taker.fsm = "carry";
@@ -3040,10 +3238,18 @@ export class SimEngine {
         // 标记角球开球人，决策时强制传中
         taker._cornerTakerUntil = this.t + 3;
       }
+      if (type === "freekick" && fkSetPiece) {
+        // 主罚计划在摆位时定死（射/传中），_decideOnBall 到时执行
+        taker._fkPlan = Math.random() < fkShootP ? "shoot" : "cross";
+        taker._fkPlanUntil = this.t + 6;
+      }
     }
     this.possession = restartTeam;
-    // 角球死球窗更长，画面上能看清「角球状态」
-    this.deadBallUntil = this.t + (type === "corner" ? 1.8 : 1.0);
+    // 角球/人墙任意球死球窗更长，画面上能看清定位球状态
+    this.deadBallUntil =
+      this.t + (type === "corner" ? 1.8 : fkSetPiece ? 2.0 : 1.0);
+    // 人墙任意球复用角球的短窗保形：开球前全员钉在摆位点，不被跑位逻辑拆散
+    if (fkSetPiece) this.cornerShapeUntil = this.t + 2.6;
     this._emit(type, taker, { x, y, setPiece: type });
   }
 

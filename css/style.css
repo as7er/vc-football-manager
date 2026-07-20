@@ -4408,6 +4408,15 @@ html[data-theme="light"] .player-modal-head .avatar {
   width: 100%;
   height: 100%;
 }
+/* canvas-PNG 像素头像：任何缩放下保持硬边 */
+.avatar-px,
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: pixelated;
+}
 .name-with-avatar,
 .avatar-cell {
   display: flex;

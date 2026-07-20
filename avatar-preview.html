@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>热血像素头像预览</title>
+<style>
+  body { background: #1a2030; color: #dde3ee; font-family: system-ui, sans-serif; padding: 20px; }
+  h2 { margin: 22px 0 8px; font-size: 15px; color: #9fb0cc; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .cell { text-align: center; }
+  .cell .lb { font-size: 10px; color: #8a97ad; margin-top: 3px; }
+  .avatar { display: inline-flex; border-radius: 18%; overflow: hidden; line-height: 0;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 2px 6px rgba(0,0,0,.28); }
+  .grid-note { font-size: 12px; color: #6d7a92; margin: 4px 0 14px; }
+</style>
+</head>
+<body>
+<h1 style="font-size:18px">热血系列像素头像 · 预览</h1>
+<div class="grid-note">python -m http.server 8765 → http://127.0.0.1:8765/avatar-preview.html</div>
+<div id="root"></div>
+<script type="module">
+import { renderAvatarSvg, avatarHtml } from "./js/avatar.js";
+
+const root = document.getElementById("root");
+const NATIONS = ["ENG","ESP","GER","FRA","ITA","POR","BRA","ARG","NED","BEL","CRO","URU","COL","MEX","USA","JPN","KOR","CHN","NGA","SEN","GHA","CIV","MAR","POL","DEN","SWE","NOR","SUI","AUT","TUR","SRB","UKR","SCO","WAL","IRL","AUS"];
+
+function block(title, html) {
+  root.insertAdjacentHTML("beforeend", `<h2>${title}</h2><div class="row">${html}</div>`);
+}
+
+// 1) 各国抽样：每国 8 个种子（64px 看细节）
+for (const nat of NATIONS) {
+  let html = "";
+  for (let i = 0; i < 8; i++) {
+    const svg = renderAvatarSvg({ seed: `${nat}-demo-${i}`, name: nat, nation: nat, size: 64, kitPrimary: "#c0392b", kitSecondary: "#f8fafc" });
+    html += `<div class="cell"><span class="avatar" style="width:64px;height:64px">${svg}</span><div class="lb">${nat}-${i}</div></div>`;
+  }
+  block(`${nat}`, html);
+}
+
+// 2) 心情五态（同一人）
+{
+  let html = "";
+  for (const mood of ["neutral","happy","injured","tired","sad"]) {
+    const svg = renderAvatarSvg({ seed: "mood-demo-3", nation: "JPN", size: 80, mood, kitPrimary: "#2563eb", kitSecondary: "#f8fafc" });
+    html += `<div class="cell"><span class="avatar" style="width:80px;height:80px">${svg}</span><div class="lb">${mood}</div></div>`;
+  }
+  block("心情（同一球员）", html);
+}
+
+// 3) 小尺寸可读性（26/28/30/36/40）
+{
+  let html = "";
+  for (const s of [26, 28, 30, 36, 40, 64]) {
+    const svg = renderAvatarSvg({ seed: "size-demo-5", nation: "BRA", size: s, kitPrimary: "#16a34a", kitSecondary: "#facc15" });
+    html += `<div class="cell"><span class="avatar" style="width:${s}px;height:${s}px">${svg}</span><div class="lb">${s}px</div></div>`;
+  }
+  block("尺寸阶梯", html);
+}
+
+// 4) GK 与深色球衣对比
+{
+  let html = "";
+  for (const [kp, ks, lb] of [["#111827","#f8fafc","深黑衣"],["#f8fafc","#111827","白衣"],["#facc15","#1e3a8a","黄蓝"],["#dc2626","#ffffff","红白"]]) {
+    const svg = renderAvatarSvg({ seed: "kit-demo-2", nation: "GER", size: 64, pos: "GK", kitPrimary: kp, kitSecondary: ks });
+    html += `<div class="cell"><span class="avatar" style="width:64px;height:64px">${svg}</span><div class="lb">GK ${lb}</div></div>`;
+  }
+  block("门将 + 球衣对比度", html);
+}
+
+// 5) 职员
+{
+  let html = "";
+  for (const role of ["coach","scout","doctor","manager"]) {
+    const svg = renderAvatarSvg({ seed: `staff-${role}`, size: 64, role });
+    html += `<div class="cell"><span class="avatar" style="width:64px;height:64px">${svg}</span><div class="lb">${role}</div></div>`;
+  }
+  block("职员（教练/球探/队医/经理）", html);
+}
+</script>
+</body>
+</html>

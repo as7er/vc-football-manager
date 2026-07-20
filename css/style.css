@@ -4319,14 +4319,14 @@ html[data-theme="light"] .board-box.done {
 .avatar {
   display: inline-flex;
   flex-shrink: 0;
-  border-radius: 50%;
+  /* 像素画风：复古方框（圆形会切掉飞机头/爆炸头的角） */
+  border-radius: 18%;
   overflow: hidden;
   vertical-align: middle;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14),
     0 2px 6px rgba(0, 0, 0, 0.28);
   line-height: 0;
-  /* 中性冷灰底，与深色球衣拉开（勿用近黑海军蓝） */
   background: #3a4256;
   transition: box-shadow 0.15s ease, transform 0.12s ease;
 }

@@ -129,19 +129,78 @@ function simTToMinute(tSec) {
 }
 
 /**
- * 跑完一个时段（上/下半场），产出缩放结果 + 风味事件。
+ * 直播帧录制策略（单遍、事件驱动）：
+ * - 环形缓冲保留最近 ~20s 的 10Hz 帧（覆盖高光窗 lead）
+ * - 进球/扑救/威胁射/角球/开球等触发后：回灌 ring + 继续密采 trail
+ * - 平淡时段不落盘 → 半场从 ~2.7 万帧降到通常 1–3 千级
+ * 与 buildHighlightWindows 的 lead/trail 对齐，保证 play 段仍可 60fps 插值。
+ */
+const LIVE_RING_SEC = 20;
+const LIVE_DENSE = {
+  goal: { lead: 12, trail: 8 },
+  save: { lead: 14, trail: 8 },
+  shot: { lead: 16, trail: 6 },
+  corner: { lead: 2, trail: 13 },
+  kickoff: { lead: 0, trail: 14 },
+  // 伤退热替换：短窗够看清换人，不进高光预算
+  injury: { lead: 4, trail: 6 },
+  sub_on: { lead: 2, trail: 6 },
+};
+
+function pushLiveFrame(frames, f) {
+  if (!frames || !f) return;
+  const last = frames[frames.length - 1];
+  if (last && Math.abs((last.t ?? 0) - (f.t ?? 0)) < 1e-9) {
+    frames[frames.length - 1] = f; // 同刻以新帧为准（netHit 脉冲）
+    return;
+  }
+  if (last && (f.t ?? 0) < (last.t ?? 0) - 1e-9) return;
+  frames.push(f);
+}
+
+function flushRingToFrames(ring, frames, t0, t1) {
+  if (!ring?.length || !frames) return;
+  for (const f of ring) {
+    const t = f.t ?? 0;
+    if (t + 1e-9 < t0) continue;
+    if (t > t1 + 1e-9) break;
+    pushLiveFrame(frames, f);
+  }
+}
+
+function liveInterestOfEvent(e, tStart) {
+  if (!e) return null;
+  if (e.type === "goal") return LIVE_DENSE.goal;
+  if (e.type === "save") return LIVE_DENSE.save;
+  if (e.type === "shot") return LIVE_DENSE.shot;
+  if (e.type === "corner") return LIVE_DENSE.corner;
+  if (e.type === "injury") return LIVE_DENSE.injury;
+  if (e.type === "sub_on") return LIVE_DENSE.sub_on;
+  // 半场开球瞬间（引擎 kickoff 事件）
+  if (e.type === "kickoff") return LIVE_DENSE.kickoff;
+  return null;
+}
+
+/**
+ * 跑完一个时段（上/下半场），产出结果 + 风味事件。
  * @param {SimEngine} eng
  * @param {number} fromMin 含（1 或 46）
  * @param {number} toMin 含（45 或 90）
- * @param {{ record?: boolean, sampleEvery?: number }} [opts]
- *   record=true 时按 sampleEvery 步采一帧（供直播真空间投影）
+ * @param {{ record?: boolean, sampleEvery?: number, adaptive?: boolean }} [opts]
+ *   record=true 录帧；adaptive=true（默认当 record）事件驱动密采，否则均匀 sampleEvery
  */
 export function runSimPeriodRaw(eng, fromMin, toMin, opts = {}) {
   const tStart = (fromMin - 1) * 60; // 1'→0s，46'→45*60
   const tEnd = toMin * 60;
   const record = !!opts.record;
-  const sampleEvery = Math.max(1, opts.sampleEvery ?? 5); // 默认 0.5s 一帧
+  const adaptive = record && opts.adaptive !== false;
+  const sampleEvery = Math.max(1, opts.sampleEvery ?? (adaptive ? 1 : 5));
   const frames = record ? [] : null;
+  const ringMax = Math.ceil(LIVE_RING_SEC / SIM.DT) + 2;
+  const ring = record && adaptive ? [] : null;
+  // 开球段强制密采（与 buildHighlightWindows kickoff 窗一致）
+  let denseUntil = record && adaptive ? Math.min(tEnd, tStart + LIVE_DENSE.kickoff.trail) : -Infinity;
+  let eventCursor = eng.events?.length || 0;
   // 时段控球秒数差分（引擎 stats.poss 是累计）
   const poss0 = {
     home: eng.stats?.home?.poss || 0,
@@ -152,13 +211,35 @@ export function runSimPeriodRaw(eng, fromMin, toMin, opts = {}) {
   while (eng.t + 1e-9 < tEnd && guard < guardMax) {
     eng.step();
     guard++;
-    if (frames && guard % sampleEvery === 0) {
+    if (!frames) continue;
+
+    if (adaptive) {
+      // 1) 消化本步新事件 → 回灌 ring + 延长密采
+      const evs = eng.events || [];
+      while (eventCursor < evs.length) {
+        const e = evs[eventCursor++];
+        if (e.t <= tStart || e.t > tEnd) continue;
+        const win = liveInterestOfEvent(e, tStart);
+        if (!win) continue;
+        const t0 = Math.max(tStart, e.t - win.lead);
+        const t1 = Math.min(tEnd, e.t + win.trail);
+        flushRingToFrames(ring, frames, t0, t1);
+        denseUntil = Math.max(denseUntil, t1);
+      }
+      // 2) 本步帧进 ring；密采窗内落盘
+      const fr = compactSimFrame(eng);
+      ring.push(fr);
+      if (ring.length > ringMax) ring.shift();
+      if (eng.t <= denseUntil + 1e-9) {
+        pushLiveFrame(frames, fr);
+      }
+    } else if (guard % sampleEvery === 0) {
       frames.push(compactSimFrame(eng));
     }
   }
-  // 半场末强制一帧
+  // 半场末强制一帧（边界/插值兜底）
   if (frames && (!frames.length || frames[frames.length - 1].t < eng.t - 1e-6)) {
-    frames.push(compactSimFrame(eng));
+    pushLiveFrame(frames, compactSimFrame(eng));
   }
 
   // 原始模拟已经校准到可观看量级；比分和高光必须来自同一批空间事件。
@@ -179,7 +260,18 @@ export function runSimPeriodRaw(eng, fromMin, toMin, opts = {}) {
   for (const e of raw) {
     if (e.type === "foul" && (e.team === "home" || e.team === "away")) fouls[e.team]++;
   }
-  return { scaled, flavor, tStart, tEnd, steps: guard, frames, fouls };
+  return {
+    scaled,
+    flavor,
+    tStart,
+    tEnd,
+    steps: guard,
+    frames,
+    fouls,
+    frameStats: frames
+      ? { count: frames.length, adaptive, denseUntil, ringSec: LIVE_RING_SEC }
+      : null,
+  };
 }
 
 /** 压缩快照：直播投影够用，体积小于完整 snapshot */

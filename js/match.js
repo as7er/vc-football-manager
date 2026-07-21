@@ -875,12 +875,12 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
   if (fromMin >= 46) resyncSimAfterHalfTime(state);
 
   const liveStream = !!(state._liveMode && onEvent);
-  // 高光窗需要够密的帧才能 60fps 插值不抖；平淡时段只用来抽帧边界
+  // 直播：事件驱动密采（高光邻域 10Hz），平淡不落盘；非直播不录帧
   const period = runSimPeriodRaw(state.simEng, fromMin, toMin, {
     record: liveStream,
-    sampleEvery: liveStream ? 1 : 5,
+    adaptive: liveStream,
   });
-  const { scaled, flavor, tStart, tEnd, frames } = period;
+  const { scaled, flavor, tStart, tEnd } = period;
 
   // 射门 / 射正 / xG / 控球：与空间事件同源（禁止掷骰）
   applySimPeriodStats(state, period);
@@ -920,7 +920,17 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
     tStart,
     tEnd,
   });
-  const segments = buildHighlightSegments(frames || [], hl.windows, tStart, tEnd);
+  // 只保留最终高光窗内的帧（自适应录制会多记未入选的射门/扑救邻域）
+  let recorded = period.frames || [];
+  if (recorded.length && hl.windows?.length) {
+    const wins = hl.windows;
+    recorded = recorded.filter((f) => {
+      const t = f.t ?? 0;
+      return wins.some((w) => t >= w.t0 - 0.2 && t <= w.t1 + 0.2);
+    });
+  }
+  const segments = buildHighlightSegments(recorded, hl.windows, tStart, tEnd);
+  period.frames = null;
 
   if (state.simEngineMeta) {
     state.simEngineMeta.halves.push({
@@ -929,7 +939,8 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
       scaledScore: { ...scaled.score },
       scaledShots: { ...scaled.shots },
       goals: scaled.goals.length,
-      frames: frames?.length || 0,
+      frames: period.frameStats?.count || segments.reduce((n, s) => n + (s.frames?.length || 0), 0),
+      frameStats: period.frameStats || null,
       highlightWindows: hl.windows.length,
       highlightPlaySec: Math.round(hl.playSec),
     });

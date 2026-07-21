@@ -424,7 +424,7 @@ export class MatchView {
    *   simT += realDt * speed * rate * rateMul
    *   rateMul 由导演系统控制（射门前/进球/扑救慢镜）
    *
-   * @param {Array} frames compactSimFrame[]  建议 sampleEvery=1（0.1s）
+   * @param {Array} frames compactSimFrame[]  高光窗建议 10Hz（自适应录制已保证）
    * @param {object} [opts]
    * @param {() => number} [opts.getSpeed]
    * @param {() => boolean} [opts.isPaused]

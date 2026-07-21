@@ -15,7 +15,7 @@
 |----|------|------|
 | **A** | 关系 -2..+2、约谈、氛围、对立发信 | `relations.js` |
 | **B** | 紧急信箱门闸、球探任务、关注过滤 | `worldpulse.js`, `main.js` |
-| **C** | 战术板 pointer 拖拽、港湾/钢铁/磨坊队服 | `main.js`, `clubs.js`, `models.js`, `avatar.js` |
+| **C** | 战术板 pointer 拖拽、Harbourgate/Steelborough/Millford 队服 | `main.js`, `clubs.js`, `models.js`, `avatar.js` |
 | **D** | 财政简报、青训周报、世界新闻、成就徽章 | `worldpulse.js`, 概览 UI |
 
 ### 比赛引擎 v2（P0–P5）
@@ -51,6 +51,7 @@
 - 伤病空间化（P3 收尾）：接触伤从犯规涌现（严重度 none 1% / 黄 6% / 直红 20%），疲劳伤每模拟分钟抽查体能最低者（引擎体能是开场快照——带伤/低体能上阵才有风险）；伤员真实退场（复用 `sentOff` 减员）→ ~40s 后**热替换**替补从中线进场恢复 11v11（`substituteAgent` + `onInjurySub` 回调），无名额/无人选则少人作战；门将不受伤。`match.js` `wireSimInjuries`：队医×训练×天气 → `eng.injuryMul`；替补自动选人（同位置优先；**用户队也自动**——半场预跑无法中途询问，事件可见、中场可调；AI 静默）；伤情落账复用旧通道（天数 contact 2-6/fatigue 1-3、`injuredOut`、`applySubstitution`）。量级 ~0.45-0.5/场。探针 `js/sim/_injury.mjs`
 - 防死锁看门狗 `_antiDeadlock`：球权/球位 20s 零进展 → 强制大脚解围（emit `stall_clear`）。僵持根因已专项修（队射门冷却豁免/press 迟滞/松球 clamp/sentOff 接管等）；看门狗保留作保险（~0 次/场）。连带修：`_resolvePossession` 自由球接管、死球摆位全部过滤 `sentOff`
 - **A 批修复（v107）**：`directResult` 透传 `penalty`；`addSimGoal` 禁止 `pickAssister` 回退、点球文案「点球破门」；SW 预缓存补 media/staff/board/training 等；`index.html` 保护键与 CACHE 对齐；autosave 失败 toast
+- **乌龙记账**：`_goal` 标 `ownGoal`（lastKicker 属失球方）；`directResult` / `addSimGoal` 透传；比分始终给得分方，文案「乌龙」，触球者不进个人进球榜；找不到球员也涨分。探针 `js/sim/_owngoal.mjs`
 - 传球：直接回传降权；直塞只在最后防线附近生成；门将主动处理低平身后球
 - 抢断：仅球队指定 presser 下脚；球权转换后 4s 组织窗；个人/全队抢断冷却
 - 进攻站位：边锋保持左右宽度，中场按固定 lane 接应；最后三区仅一名中场前插

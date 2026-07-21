@@ -748,6 +748,13 @@ function migrateWorld(w) {
     if (!c.division) {
       c.division = c.power >= 72 ? 1 : c.power >= 60 ? 2 : 3;
     }
+    // 队名随模板刷新（id 不变，兼容旧档队服/关系；显示名可改版）
+    const tpl = CLUB_TEMPLATES.find((t) => t.id === c.id);
+    if (tpl) {
+      c.name = tpl.name;
+      c.short = tpl.short;
+      if (tpl.color && !c.kit) c.color = tpl.color;
+    }
     ensureStaff(c);
     ensureYouthAcademy(c);
     ensureKit(c);

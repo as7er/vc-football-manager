@@ -459,7 +459,7 @@ function shiftHex(hex, delta) {
 /** 为俱乐部生成/补齐球衣配置 */
 export function ensureKit(club) {
   if (!club) return null;
-  // 主题队：始终覆盖（修正旧存档里落日城被随机成灰蓝的问题）
+  // 主题队：始终覆盖（修正旧存档里主题色被随机成灰蓝的问题）
   const theme = club.id ? KIT_THEME_BY_ID[club.id] : null;
   if (theme) {
     club.color = theme.primary;

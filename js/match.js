@@ -687,51 +687,85 @@ function addGoal(state, minute, club, xi, { penalty = false } = {}) {
 /**
  * SimEngine 适配：记一粒已知射手的进球（不再随机抽人）。
  * 射门/xG 已在时段统计里加过，这里只改比分与射手数据。
- * 助攻/点球标记必须与空间事件同源：无 assistId 不编造；点球永不记助攻。
+ * 助攻/点球/乌龙必须与空间事件同源：无 assistId 不编造；点球/乌龙永不记助攻。
+ * 乌龙：最后触球是失球方球员（封堵折射等）→ 比分仍给得分方，文案「乌龙」，
+ * 不给触球者记进球（真实规则：OG 不进个人进球榜）。
+ * 契约：比分绝不能丢——即便找不到球员也要涨分。
  */
 function addSimGoal(state, minute, team, scorerId, assistId = null, opts = {}) {
   const club = team === "home" ? state.home : state.away;
+  const opp = team === "home" ? state.away : state.home;
   const sk = team;
   const xi = activeXi(state, club);
   const penalty = !!opts.penalty;
-  // 只认引擎挂上的真实射手；找不到时禁止 pickScorer 编造（避免数据榜脏）
+  let ownGoal = !!opts.ownGoal && !penalty;
+
+  // 1) 先在得分方找射手
   let scorer =
     (scorerId && xi.find((p) => p.id === scorerId)) ||
     (scorerId && club.players.find((p) => p.id === scorerId)) ||
     null;
-  if (!scorer) {
-    console.warn("addSimGoal: unknown scorerId", scorerId, "team", team, "min", minute);
-    return null;
+
+  // 2) 得分方没有 → 对方最后触球 = 乌龙/折射（或引擎已标 ownGoal）
+  let ogPlayer = null;
+  if (!scorer && scorerId) {
+    ogPlayer =
+      opp.players.find((p) => p.id === scorerId) ||
+      null;
+    if (ogPlayer) ownGoal = !penalty;
   }
-  // 只认引擎挂上的真实助攻；找不到或点球 → 无助攻（禁止 pickAssister 回退）
+  if (ownGoal && scorer) {
+    // 引擎标了乌龙但 id 误落在得分方：仍按正常进球处理（防脏标记）
+    ownGoal = false;
+  }
+
+  // 只认引擎挂上的真实助攻；找不到 / 点球 / 乌龙 → 无助攻
   let assister = null;
-  if (!penalty && assistId && assistId !== scorer.id) {
+  if (!penalty && !ownGoal && assistId && scorer && assistId !== scorer.id) {
     assister =
       xi.find((p) => p.id === assistId) ||
       club.players.find((p) => p.id === assistId) ||
       null;
   }
+
+  // 比分始终记给得分方（与引擎 score / 门线归属一致）
   if (sk === "home") state.hg++;
   else state.ag++;
-  if (!state.isCup) {
+
+  // 个人数据：正常进球记射手；乌龙不记任何人进球
+  if (!state.isCup && scorer && !ownGoal) {
     ensureStats(scorer).goals++;
     if (assister) ensureStats(assister).assists++;
   }
-  const assistText = assister ? `（助攻：${assister.name}）` : "";
-  const label = penalty ? "点球破门" : "破门";
-  return pushEv(
-    state,
-    minute,
-    "goal",
-    `⚽ ${minute}' ${club.short || club.name} ${scorer.name} ${label}！${assistText}`,
-    {
-      teamId: club.id,
-      playerId: scorer.id,
-      assistId: assister?.id || null,
-      penalty,
-      fromSim: true,
+
+  let text;
+  const extra = {
+    teamId: club.id,
+    penalty,
+    ownGoal: !!ownGoal,
+    fromSim: true,
+  };
+  if (ownGoal && ogPlayer) {
+    text = `⚽ ${minute}' ${club.short || club.name} 受益！${opp.short || opp.name} ${ogPlayer.name} 乌龙！`;
+    extra.playerId = ogPlayer.id;
+    extra.ownGoalPlayerId = ogPlayer.id;
+    extra.assistId = null;
+  } else if (scorer) {
+    const assistText = assister ? `（助攻：${assister.name}）` : "";
+    const label = penalty ? "点球破门" : "破门";
+    text = `⚽ ${minute}' ${club.short || club.name} ${scorer.name} ${label}！${assistText}`;
+    extra.playerId = scorer.id;
+    extra.assistId = assister?.id || null;
+  } else {
+    // 无 lastKicker / id 对不上：仍落账，避免「引擎进球、记分板不涨」
+    if (scorerId) {
+      console.warn("addSimGoal: unknown scorerId (score kept)", scorerId, "team", team, "min", minute);
     }
-  );
+    text = `⚽ ${minute}' ${club.short || club.name} 破门！`;
+    extra.playerId = null;
+    extra.assistId = null;
+  }
+  return pushEv(state, minute, "goal", text, extra);
 }
 
 /**
@@ -902,6 +936,7 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
       scorerId: g.scorerId,
       assistId: g.assistId || null,
       penalty: !!g.penalty,
+      ownGoal: !!g.ownGoal,
     });
   }
   for (const f of flavor) {
@@ -989,6 +1024,7 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
         if (c.kind === "goal")
           addSimGoal(state, c.minute, c.team, c.scorerId, c.assistId || null, {
             penalty: !!c.penalty,
+            ownGoal: !!c.ownGoal,
           });
         else if (c.kind === "flavor") pushSimFlavor(state, c.item);
         if (show && onEvent) {
@@ -1038,6 +1074,7 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
       if (c.kind === "goal")
         addSimGoal(state, c.minute, c.team, c.scorerId, c.assistId || null, {
           penalty: !!c.penalty,
+          ownGoal: !!c.ownGoal,
         });
       else pushSimFlavor(state, c.item);
     }
@@ -1061,6 +1098,7 @@ async function simulatePeriodWithSim(state, fromMin, toMin, { onEvent, playHighl
       if (c.kind === "goal")
         addSimGoal(state, minute, c.team, c.scorerId, c.assistId || null, {
           penalty: !!c.penalty,
+          ownGoal: !!c.ownGoal,
         });
       else if (c.kind === "flavor") pushSimFlavor(state, c.item);
     }
@@ -1123,6 +1161,7 @@ function simulatePeriodWithSimSync(state, fromMin, toMin) {
       scorerId: g.scorerId,
       assistId: g.assistId || null,
       penalty: !!g.penalty,
+      ownGoal: !!g.ownGoal,
     });
   }
   for (const f of flavor) {
@@ -1145,6 +1184,7 @@ function simulatePeriodWithSimSync(state, fromMin, toMin) {
       if (item.kind === "goal")
         addSimGoal(state, minute, item.team, item.scorerId, item.assistId || null, {
           penalty: !!item.penalty,
+          ownGoal: !!item.ownGoal,
         });
       else pushSimFlavor(state, item);
     }
@@ -2049,6 +2089,7 @@ function buildReport(state) {
         playerId: e.playerId,
         text: e.text,
         penalty: !!e.penalty,
+        ownGoal: !!e.ownGoal,
       })),
     ratings: state.matchRatings || null,
     narrative,

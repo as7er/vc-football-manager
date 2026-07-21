@@ -672,6 +672,7 @@ export function translatePeriodToMatch(state, period, helpers) {
       scorerId: g.scorerId,
       assistId: g.assistId || null,
       penalty: !!g.penalty,
+      ownGoal: !!g.ownGoal,
       t: g.t,
     });
   }
@@ -689,7 +690,7 @@ export function translatePeriodToMatch(state, period, helpers) {
         item.team,
         item.scorerId,
         item.assistId || null,
-        { penalty: !!item.penalty }
+        { penalty: !!item.penalty, ownGoal: !!item.ownGoal }
       );
       if (ev) emitted.push(ev);
     } else {

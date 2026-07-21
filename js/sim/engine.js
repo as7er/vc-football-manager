@@ -3295,6 +3295,8 @@ export class SimEngine {
   /**
    * 进球：记分、发事件 → 庆祝聚拢（约 5.5s）→ 再中圈开球（对方开）
    * 避免「入网瞬间整队瞬移回中圈」的观感断层。
+   * 乌龙：lastKicker 属于失球方（封堵折射/自摆乌龙）时标 ownGoal；
+   * agentId 仍是最后触球者，team 永远是得分方（与门线归属一致）。
    */
   _goal(scoringTeam) {
     const b = this.ball;
@@ -3302,8 +3304,13 @@ export class SimEngine {
     const scorer = b.lastKicker ? this.agentById(b.lastKicker) : null;
     const isPenalty = !!b._penaltyGoal;
     b._penaltyGoal = false;
+    // 最后触球方 ≠ 得分方 → 乌龙/折射入网；点球不可能乌龙
+    const ownGoal = !isPenalty && !!scorer && scorer.team && scorer.team !== scoringTeam;
     const assistId =
-      !isPenalty && b._shotAssistId && b._shotAssistId !== scorer?.id
+      !isPenalty &&
+      !ownGoal &&
+      b._shotAssistId &&
+      b._shotAssistId !== scorer?.id
         ? b._shotAssistId
         : null;
     this._emit("goal", scorer, {
@@ -3311,6 +3318,7 @@ export class SimEngine {
       score: { ...this.score },
       assistId,
       penalty: isPenalty,
+      ownGoal,
     });
 
     // 球钉在球门线外/网口（主队进客门 y≈0，客队进主门 y≈100）
@@ -3562,8 +3570,9 @@ export class SimEngine {
         minute: clamp(Math.floor(goal.t / 60) + 1, 1, 90),
         scorerId: goal.agentId || null,
         assistId: goal.assistId || null,
-        // 与 _goal 同源：点球不记助攻，战报文案走「点球破门」
+        // 与 _goal 同源：点球不记助攻；乌龙不记射手进球/助攻
         penalty: !!goal.penalty,
+        ownGoal: !!goal.ownGoal,
         t: goal.t,
       });
     }

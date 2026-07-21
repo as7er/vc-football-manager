@@ -1,13 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VCFM">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1a5c3a"/>
-      <stop offset="100%" stop-color="#0b1220"/>
+    <linearGradient id="bg" x1="12%" y1="8%" x2="88%" y2="96%">
+      <stop offset="0%" stop-color="#1a2b48"/>
+      <stop offset="48%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#060b14"/>
     </linearGradient>
+    <linearGradient id="pitch" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#24965a"/>
+      <stop offset="100%" stop-color="#0d4a2c"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="22%" y1="12%" x2="80%" y2="92%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c5d0de"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7eb6ff"/>
+      <stop offset="55%" stop-color="#3d8bfd"/>
+      <stop offset="100%" stop-color="#3dd68c"/>
+    </linearGradient>
+    <filter id="soft" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#g)"/>
-  <circle cx="256" cy="240" r="120" fill="none" stroke="#e8eefc" stroke-width="16"/>
-  <path d="M256 120 L256 360 M136 240 L376 240" stroke="#e8eefc" stroke-width="9" opacity="0.45"/>
-  <circle cx="256" cy="240" r="30" fill="#3d8bfd"/>
-  <text x="256" y="430" text-anchor="middle" fill="#e8eefc" font-family="Segoe UI,sans-serif" font-size="56" font-weight="700">VCFM</text>
+
+  <!-- App tile (maskable-friendly dark base) -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="url(#ring)" stroke-opacity="0.45" stroke-width="5"/>
+
+  <!-- Crest -->
+  <g filter="url(#soft)" transform="translate(0 -6)">
+    <path d="M256 78
+             C322 78 378 96 408 122
+             V246
+             C408 342 342 404 256 444
+             C170 404 104 342 104 246
+             V122
+             C134 96 190 78 256 78Z"
+          fill="url(#pitch)" stroke="#e8eefc" stroke-opacity="0.2" stroke-width="5"/>
+    <!-- pitch lines -->
+    <path d="M256 128 V392" stroke="#e8eefc" stroke-opacity="0.3" stroke-width="5" stroke-linecap="round"/>
+    <path d="M152 248 H360" stroke="#e8eefc" stroke-opacity="0.22" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="256" cy="248" r="40" fill="none" stroke="#e8eefc" stroke-opacity="0.34" stroke-width="5"/>
+    <!-- goal boxes hint -->
+    <rect x="210" y="132" width="92" height="36" rx="4" fill="none" stroke="#e8eefc" stroke-opacity="0.2" stroke-width="3"/>
+    <rect x="210" y="328" width="92" height="36" rx="4" fill="none" stroke="#e8eefc" stroke-opacity="0.2" stroke-width="3"/>
+  </g>
+
+  <!-- Classic football -->
+  <g transform="translate(256 236)">
+    <circle r="82" fill="url(#ball)" stroke="#0b1220" stroke-width="7"/>
+    <path d="M0 -36 L34 -11 L21 30 L-21 30 L-34 -11 Z" fill="#0f172a"/>
+    <path d="M0 -36 L19 -74 M34 -11 L76 -19 M21 30 L50 70 M-21 30 L-50 70 M-34 -11 L-76 -19"
+          fill="none" stroke="#0f172a" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M19 -74 L76 -19 L50 70 L-50 70 L-76 -19 Z"
+          fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="256" y="474" text-anchor="middle"
+        fill="#e8eefc" font-family="Segoe UI, system-ui, -apple-system, sans-serif"
+        font-size="48" font-weight="800" letter-spacing="8">VCFM</text>
 </svg>

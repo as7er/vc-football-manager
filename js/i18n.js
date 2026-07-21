@@ -404,6 +404,7 @@ const dict = {
     // toast / common
     "toast.saved": "已存到槽 {n}",
     "toast.saveFail": "存档失败",
+    "toast.autosaveFail": "自动存档失败 · 存储可能已满，请立即导出备份",
     "toast.exported": "存档已下载 · 换设备请导入此文件",
     "toast.exportFail": "导出失败",
     "toast.exportedOk": "存档已下载 · 请保存到网盘/文件，换设备可导入",
@@ -804,6 +805,7 @@ const dict = {
 
     "toast.saved": "Saved to slot {n}",
     "toast.saveFail": "Save failed",
+    "toast.autosaveFail": "Autosave failed · storage may be full — export a backup now",
     "toast.exported": "Save downloaded · import on the other device",
     "toast.exportFail": "Export failed",
     "toast.exportedOk": "Save downloaded · keep the file for other devices",

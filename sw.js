@@ -1,7 +1,7 @@
 /* VCFM offline cache (GitHub Pages friendly)
  * JS/CSS/HTML: network-first + no-store
  */
-const CACHE = "vcfm-v106";
+const CACHE = "vcfm-v107";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,6 +28,15 @@ const ASSETS = [
   "./js/inbox.js",
   "./js/relations.js",
   "./js/worldpulse.js",
+  // 运行时依赖（此前遗漏会导致离线半残）
+  "./js/media.js",
+  "./js/staff.js",
+  "./js/intl.js",
+  "./js/honors.js",
+  "./js/cup.js",
+  "./js/board.js",
+  "./js/training.js",
+  "./js/facilities.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
 ];

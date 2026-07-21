@@ -24,7 +24,7 @@ import {
 } from "./data.js";
 import { ensureMedia, mediaSeasonKickoff } from "./media.js";
 import { t, initPrefs, getLang } from "./i18n.js";
-import { getMatchView, destroyMatchView } from "./matchview.js?v=68";
+import { getMatchView, destroyMatchView } from "./matchview.js?v=107";
 
 function nationLabel(p) {
   if (p.nationFlag && p.nationName) return `${p.nationFlag} ${p.nationName}`;
@@ -203,7 +203,7 @@ import {
   playerAvatarHtml,
   staffAvatarHtml,
   avatarHtml,
-} from "./avatar.js?v=64";
+} from "./avatar.js?v=107";
 
 /** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
@@ -508,11 +508,18 @@ let matchSpeed = (() => {
 const EXPORT_TIP_KEY = "vcfm-last-export";
 const OLD_EXPORT_TIP_KEY = "vc-fm-last-export";
 
-/** 自动存档（静默，失败仅 console） */
+/** 自动存档；失败 toast 提示（配额满/隐私模式），避免进度静默丢失 */
 function autosave(msg) {
   if (!world) return false;
   const ok = saveGame(world);
-  if (!ok) console.warn("autosave failed", msg || "");
+  if (!ok) {
+    console.warn("autosave failed", msg || "");
+    try {
+      toast(t("toast.autosaveFail"));
+    } catch (_) {
+      /* toast / i18n 尚未就绪时至少 console */
+    }
+  }
   return ok;
 }
 

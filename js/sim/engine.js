@@ -3516,6 +3516,8 @@ export class SimEngine {
         minute: clamp(Math.floor(goal.t / 60) + 1, 1, 90),
         scorerId: goal.agentId || null,
         assistId: goal.assistId || null,
+        // 与 _goal 同源：点球不记助攻，战报文案走「点球破门」
+        penalty: !!goal.penalty,
         t: goal.t,
       });
     }

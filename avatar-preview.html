@@ -12,16 +12,16 @@
   .avatar { display: inline-flex; border-radius: 18%; overflow: hidden; line-height: 0;
     box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 2px 6px rgba(0,0,0,.28); }
   .avatar img { display: block; width: 100%; height: 100%;
-    image-rendering: -moz-crisp-edges; image-rendering: pixelated; }
+    image-rendering: auto; }
   .grid-note { font-size: 12px; color: #6d7a92; margin: 4px 0 14px; }
 </style>
 </head>
 <body>
-<h1 style="font-size:18px">热血系列像素头像 · 预览（canvas-PNG 路径，与游戏内一致）</h1>
+<h1 style="font-size:18px">清晰像素头像 · 预览（canvas-PNG 路径，与游戏内一致）</h1>
 <div class="grid-note">python -m http.server 8765 → http://127.0.0.1:8765/avatar-preview.html</div>
 <div id="root"></div>
 <script type="module">
-import { avatarHtml } from "./js/avatar.js";
+import { avatarHtml } from "./js/avatar.js?v=114";
 
 const root = document.getElementById("root");
 const NATIONS = ["ENG","ESP","GER","FRA","ITA","POR","BRA","ARG","NED","BEL","CRO","URU","COL","MEX","USA","JPN","KOR","CHN","NGA","SEN","GHA","CIV","MAR","POL","DEN","SWE","NOR","SUI","AUT","TUR","SRB","UKR","SCO","WAL","IRL","AUS"];

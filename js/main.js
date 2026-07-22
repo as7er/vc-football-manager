@@ -24,7 +24,7 @@ import {
 } from "./data.js";
 import { ensureMedia, mediaSeasonKickoff } from "./media.js";
 import { t, initPrefs, getLang } from "./i18n.js";
-import { getMatchView, destroyMatchView } from "./matchview.js?v=110";
+import { getMatchView, destroyMatchView } from "./matchview.js?v=114";
 
 function nationLabel(p) {
   if (p.nationFlag && p.nationName) return `${p.nationFlag} ${p.nationName}`;
@@ -203,7 +203,7 @@ import {
   playerAvatarHtml,
   staffAvatarHtml,
   avatarHtml,
-} from "./avatar.js?v=110";
+} from "./avatar.js?v=114";
 
 /** 解雇后回菜单：优先提示换空槽开新档，避免误覆盖 */
 function handleSacked(result) {
@@ -834,6 +834,8 @@ function bindMainOnce() {
     } else toast(t("toast.exportFail"));
   };
 
+  $("#btn-global-search")?.addEventListener("click", () => openGlobalSearch());
+
   // 比赛倍速（含 ×0.5 慢放）
   document.querySelectorAll("[data-match-speed]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1095,6 +1097,22 @@ function bindMainOnce() {
   $("#modal").onclick = (e) => {
     if (e.target.id === "modal") closeModal();
   };
+  document.addEventListener("keydown", (e) => {
+    const modalOpen = !$("#modal")?.classList.contains("hidden");
+    if (e.key === "Escape" && modalOpen) {
+      e.preventDefault();
+      closeModal();
+      return;
+    }
+    if (!$("#screen-main")?.classList.contains("active")) return;
+    const tag = e.target?.tagName?.toLowerCase();
+    const typing = e.target?.isContentEditable || tag === "input" || tag === "textarea" || tag === "select";
+    const commandKey = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+    const slashKey = e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (!commandKey && !slashKey) return;
+    e.preventDefault();
+    openGlobalSearch();
+  });
 
   // match buttons
   $("#btn-sim-fast").onclick = () => runMatch("fast");
@@ -1542,6 +1560,7 @@ function renderTopbar() {
   const tw = transferWindowShort(world);
   $("#date-label").textContent = `${t("top.day", { n: world.day })} · ${tw}`;
   $("#money-label").textContent = formatMoney(club.money);
+  $("#btn-global-search")?.setAttribute("aria-label", t("search.open"));
 }
 
 function renderDashboard() {
@@ -1855,7 +1874,14 @@ function renderSquad() {
 function showPlayerModal(playerId) {
   const club = getUserClub(world);
   let player = club.players.find((p) => p.id === playerId);
+  let isYouth = false;
   let fromOther = null;
+  // 青训名单与一线队共用详情弹窗；青训球员不在 club.players 中，
+  // 因此必须在查找其他俱乐部之前单独覆盖本队学院名单。
+  if (!player) {
+    player = club.youth?.players?.find((p) => p.id === playerId);
+    isYouth = !!player;
+  }
   if (!player) {
     for (const c of world.clubs) {
       player = c.players.find((p) => p.id === playerId);
@@ -1945,7 +1971,7 @@ function showPlayerModal(playerId) {
     ensureKit(kitClub);
     ensurePlayerNumber(kitClub, player);
   }
-  $("#modal-card")?.classList.remove("wide");
+  $("#modal-card")?.classList.remove("wide", "search-modal");
   $("#modal-body").innerHTML = `
     <div class="player-modal-head">
       ${playerAvatarHtml(player, kitClub, 64)}
@@ -1957,7 +1983,7 @@ function showPlayerModal(playerId) {
       · ${nationLabel(player)}
       · ${player.age} 岁 · 能力 <strong class="${isOther ? "" : ovrClass(player.ovr)}">${escapeHtml(ovrShow)}</strong>
       · 潜力 <strong>${escapeHtml(String(pot))}</strong>
-      ${player.fromYouth ? ' · <span class="badge MID">青训</span>' : ""}
+      ${isYouth ? ' · <span class="badge MID">青训学院</span>' : player.fromYouth ? ' · <span class="badge MID">青训</span>' : ""}
       ${fromOther ? ` · ${escapeHtml(fromOther.name)}` : ""}
       ${isOther ? ` · <span class="muted">${getLang() === "en" ? "Scout fog" : "球探可见"} L${scoutFogLevel(club)}</span>` : ""}
     </p>
@@ -1992,8 +2018,8 @@ function showPlayerModal(playerId) {
           )
         : ""
     }
-    ${!fromOther ? renderPlayerTalkPanel(player) : ""}
-    ${renderPlayerContractActions(player, fromOther)}
+    ${!fromOther && !isYouth ? renderPlayerTalkPanel(player) : ""}
+    ${!isYouth ? renderPlayerContractActions(player, fromOther) : ""}
 
     <h3 style="margin:1rem 0 0.4rem;font-size:0.95rem">本赛季（俱乐部）</h3>
     <p class="muted" style="margin:0">出场 ${season.apps}
@@ -2068,8 +2094,10 @@ function showPlayerModal(playerId) {
     </div>
   `;
   $("#modal").classList.remove("hidden");
-  bindPlayerContractActions(player, fromOther);
-  bindPlayerTalkActions(player, fromOther);
+  if (!isYouth) {
+    bindPlayerContractActions(player, fromOther);
+    bindPlayerTalkActions(player, fromOther);
+  }
 }
 
 function renderPlayerTalkPanel(player) {
@@ -3120,7 +3148,172 @@ function bindTacticsRoleSelects() {
 
 function closeModal() {
   $("#modal")?.classList.add("hidden");
-  $("#modal-card")?.classList.remove("wide");
+  $("#modal-card")?.classList.remove("wide", "search-modal");
+}
+
+function normalizeGlobalSearch(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase();
+}
+
+function globalSearchScore(values, query) {
+  let best = Number.POSITIVE_INFINITY;
+  values.forEach((value, fieldIndex) => {
+    const text = normalizeGlobalSearch(value);
+    const at = text.indexOf(query);
+    if (at < 0) return;
+    let score = at === 0 ? 0 : 3;
+    if (at > 0 && /[\s.'-]/.test(text[at - 1])) score = 1;
+    best = Math.min(best, score + fieldIndex * 0.1 + at * 0.001);
+  });
+  return best;
+}
+
+function collectGlobalSearchResults(query) {
+  const userClub = getUserClub(world);
+  const players = [];
+  const clubs = [];
+  const youth = [];
+
+  for (const club of world.clubs || []) {
+    const clubScore = globalSearchScore([club.name, club.short], query);
+    if (Number.isFinite(clubScore)) {
+      clubs.push({ type: "club", id: club.id, label: club.name, club, score: clubScore });
+    }
+    for (const player of club.players || []) {
+      const score = globalSearchScore([player.name, playerDisplaySurname(player)], query);
+      if (!Number.isFinite(score)) continue;
+      players.push({
+        type: "player",
+        id: player.id,
+        label: player.name,
+        player,
+        club,
+        score,
+      });
+    }
+  }
+
+  for (const player of userClub.youth?.players || []) {
+    const score = globalSearchScore([player.name, playerDisplaySurname(player)], query);
+    if (!Number.isFinite(score)) continue;
+    youth.push({
+      type: "youth",
+      id: player.id,
+      label: player.name,
+      player,
+      club: userClub,
+      score,
+    });
+  }
+
+  const sortMatches = (a, b) =>
+    a.score - b.score ||
+    a.label.localeCompare(b.label, getLang() === "en" ? "en" : "zh-CN", { sensitivity: "base" });
+  players.sort(sortMatches);
+  clubs.sort(sortMatches);
+  youth.sort(sortMatches);
+
+  // Reserve room for every matching category, then refill unused slots by relevance.
+  const selected = [
+    ...players.slice(0, 6),
+    ...clubs.slice(0, 2),
+    ...youth.slice(0, 2),
+  ];
+  const selectedKeys = new Set(selected.map((item) => `${item.type}:${item.id}`));
+  const remaining = [...players, ...clubs, ...youth]
+    .filter((item) => !selectedKeys.has(`${item.type}:${item.id}`))
+    .sort(sortMatches);
+  while (selected.length < 10 && remaining.length) selected.push(remaining.shift());
+
+  return {
+    players: selected.filter((item) => item.type === "player").sort(sortMatches),
+    clubs: selected.filter((item) => item.type === "club").sort(sortMatches),
+    youth: selected.filter((item) => item.type === "youth").sort(sortMatches),
+  };
+}
+
+function globalPlayerSearchRow(item, { academy = false } = {}) {
+  const { player, club } = item;
+  const ownPlayer = club.id === world.userClubId;
+  const ovr = ownPlayer
+    ? String(player.ovr ?? playerOverall(player))
+    : formatScoutOvrFog(player, getUserClub(world), { ownPlayer: false });
+  const age = getLang() === "en" ? `Age ${player.age}` : `${player.age} 岁`;
+  const source = academy ? t("search.youth") : club.name;
+  return `<button type="button" class="global-search-result" data-player-link="${escapeHtml(player.id)}">
+    ${playerAvatarHtml(player, club, 34)}
+    <span class="global-search-copy">
+      <strong>${escapeHtml(player.name)}</strong>
+      <span>${escapeHtml(source)} · ${escapeHtml(POS_LABEL[player.pos] || player.pos)} · ${escapeHtml(age)}</span>
+    </span>
+    <span class="global-search-rating">${escapeHtml(t("th.ovr"))} ${escapeHtml(ovr)}</span>
+  </button>`;
+}
+
+function globalClubSearchRow(item) {
+  const club = item.club;
+  ensureKit(club);
+  const div = club.division || 3;
+  const divName = t(`div.${div}`) || DIVISIONS[div]?.name || "";
+  return `<button type="button" class="global-search-result" data-club-link="${escapeHtml(club.id)}">
+    <span class="kit-chip global-search-club-kit" style="${kitBadgeStyle(club)}"></span>
+    <span class="global-search-copy">
+      <strong>${escapeHtml(club.name)}</strong>
+      <span>${escapeHtml(divName)}${club.short ? ` · ${escapeHtml(club.short)}` : ""}</span>
+    </span>
+  </button>`;
+}
+
+function renderGlobalSearchResults(rawQuery) {
+  const host = $("#global-search-results");
+  if (!host) return;
+  const query = normalizeGlobalSearch(rawQuery.trim());
+  if ([...query].length < 2) {
+    host.innerHTML = `<p class="global-search-status">${escapeHtml(t("search.hint"))}</p>`;
+    return;
+  }
+
+  const results = collectGlobalSearchResults(query);
+  const total = results.players.length + results.clubs.length + results.youth.length;
+  if (!total) {
+    host.innerHTML = `<p class="global-search-status">${escapeHtml(t("search.empty"))}</p>`;
+    return;
+  }
+
+  const group = (title, items, renderItem) =>
+    items.length
+      ? `<section class="global-search-group">
+          <h3><span>${escapeHtml(title)}</span><span>${items.length}</span></h3>
+          <div class="global-search-list">${items.map(renderItem).join("")}</div>
+        </section>`
+      : "";
+  host.innerHTML = [
+    group(t("search.players"), results.players, (item) => globalPlayerSearchRow(item)),
+    group(t("search.clubs"), results.clubs, globalClubSearchRow),
+    group(t("search.youth"), results.youth, (item) => globalPlayerSearchRow(item, { academy: true })),
+  ].join("");
+}
+
+function openGlobalSearch() {
+  if (!world || !$("#screen-main")?.classList.contains("active")) return;
+  const card = $("#modal-card");
+  card?.classList.remove("wide");
+  card?.classList.add("search-modal");
+  $("#modal-body").innerHTML = `
+    <div class="global-search-shell">
+      <h2 id="global-search-title">${escapeHtml(t("search.title"))}</h2>
+      <input id="global-search-input" class="global-search-input" type="search"
+        autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("search.placeholder"))}" />
+      <div id="global-search-results" class="global-search-results" aria-live="polite"></div>
+    </div>`;
+  $("#modal").classList.remove("hidden");
+  const input = $("#global-search-input");
+  input?.addEventListener("input", () => renderGlobalSearchResults(input.value));
+  renderGlobalSearchResults("");
+  requestAnimationFrame(() => input?.focus());
 }
 
 function clubLinkHtml(clubId, label, extraClass = "") {
@@ -3380,6 +3573,7 @@ function showClubModal(clubId) {
     </div>
   `;
 
+  $("#modal-card")?.classList.remove("search-modal");
   $("#modal-card")?.classList.add("wide");
   $("#modal").classList.remove("hidden");
 }

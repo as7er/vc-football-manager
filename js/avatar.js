@@ -5,12 +5,11 @@
  * 热血式怒眉。肤色/发色/发型按球员国籍的地区画像加权分配（稳定哈希种子）；
  * 心情系统保留：neutral 怒眉、happy 咧嘴、injured 绷带X眼、tired 汗滴、sad 垂眉。
  *
- * v5.1 清晰度：浏览器端把像素画到 canvas（每格整数设备像素）导出 PNG <img> +
- * image-rendering:pixelated——SVG crispEdges 在模态动画/系统缩放下会被平滑，
- * PNG 硬边不受合成链路影响。SVG 路径保留（预览/无 DOM 环境兜底）。
+ * v5.1 起浏览器端把像素画到 canvas（每格整数设备像素）导出 PNG <img>，
+ * 避免 SVG 在模态动画/系统缩放下出现不可控合成；SVG 路径保留作无 DOM 兜底。
  *
- * v5.2 分辨率：逻辑网格 **已升级为 32×32**（旧 16 坐标 2× + 五官/发型/球衣细化），
- * 保持热血像素风但可读性明显提高；composeCells 仍是唯一像素事实源。
+ * v5.4 自然表情：状态表情与天生五官分离；同为 neutral 的球员也会按稳定种子生成
+ * 不同眉形、眼型、目光、鼻型与嘴型，默认观感由怒眉坏笑改为平静 / 专注 / 友善。
  *
  * 对外 API 与 v4 完全兼容：moodFromPlayer / renderAvatarSvg / avatarHtml /
  * playerAvatarHtml / staffAvatarHtml。
@@ -225,7 +224,7 @@ const REGION_OF = {
   AUS: "aus",
 };
 
-/** 由国籍 + 哈希得到稳定的外貌：{ skin, skinShade, hairHex, styleId } */
+/** 由国籍 + 哈希得到稳定的外貌；face 保存与状态无关的天生五官差异。 */
 function lookFor(h, nation, age = 25) {
   const prof = REGION_PROFILES[REGION_OF[nation] || ""] || REGION_PROFILES.weur;
   const skinKey = wpick(h, 11, prof.skin);
@@ -244,12 +243,19 @@ function lookFor(h, nation, age = 25) {
   }
   const styleW = darkSkin ? STYLE_AFRO : prof.style || STYLE_DEFAULT;
   const styleId = wpick(h, 14, styleW);
-  return { skin, skinShade, hairHex, styleId, darkSkin };
+  const face = {
+    eyeStyle: (h >>> 3) % 4,
+    browStyle: (h >>> 8) % 4,
+    mouthStyle: (h >>> 13) % 4,
+    noseStyle: (h >>> 18) % 3,
+    gaze: ((h >>> 21) % 3) - 1,
+  };
+  return { skin, skinShade, hairHex, styleId, darkSkin, face };
 }
 
 // ============================================================
 // 像素绘制：32×32 单元格列表（cell 单位），双输出 SVG / canvas-PNG
-// 布局为旧 16×16 的 2× 放大，并在五官/发型/球衣上做细像素。
+// v5.3 起关键轮廓与五官直接使用 1-cell 细节，不再沿用旧 16×16 的 2× 粗块。
 // ============================================================
 
 const GRID = 32;
@@ -303,107 +309,87 @@ function bgCells(mood) {
  * H=发色 Hh=高光 S=肤色（发际线用）
  */
 function hairCells(styleId, H, Hh, S) {
+  const Hd = shiftHex(H, -22);
   switch (styleId) {
     case 0: // 平顶（国夫头）
       return [
-        Box(6, 25, 0, 1, OUT),
-        Box(6, 25, 2, 7, H),
-        Box(8, 13, 2, 3, Hh),
-        Box(6, 9, 8, 9, H),
-        Box(22, 25, 8, 9, H),
+        R(7, 24, 0, OUT), C(6, 1, 7, OUT), C(25, 1, 7, OUT),
+        Box(7, 24, 1, 6, H), R(7, 24, 7, Hd),
+        R(9, 15, 2, Hh), R(8, 12, 3, Hh),
+        R(7, 10, 8, H), R(22, 24, 8, H),
       ];
     case 1: // 飞机头（リーゼント）
       return [
-        Box(16, 25, 0, 1, OUT),
-        P(26, 2, OUT), P(27, 3, OUT),
-        Box(16, 25, 2, 3, H),
-        Box(26, 27, 4, 5, H),
-        Box(6, 25, 4, 7, H),
-        Box(6, 7, 2, 3, OUT),
-        Box(8, 15, 2, 3, OUT),
-        Box(18, 23, 2, 3, Hh),
-        P(24, 4, Hh), P(25, 5, Hh),
-        Box(6, 9, 8, 9, H),
-        Box(22, 25, 8, 9, H),
+        R(15, 25, 0, OUT), P(26, 1, OUT), P(27, 2, OUT), P(28, 3, OUT),
+        R(7, 14, 1, OUT), P(6, 2, OUT),
+        Box(15, 25, 1, 3, H), R(26, 27, 2, H), P(27, 3, H),
+        Box(7, 26, 3, 7, H), R(6, 25, 7, Hd),
+        R(18, 24, 1, Hh), R(20, 25, 2, Hh), P(25, 3, Hh),
+        R(7, 10, 8, H), R(22, 24, 8, H),
       ];
     case 2: // 刺猬头
       return [
-        P(6, 2, H), P(7, 2, H), P(10, 2, H), P(11, 2, H),
-        P(14, 2, H), P(15, 2, H), P(18, 2, H), P(19, 2, H),
-        P(22, 2, H), P(23, 2, H),
-        P(8, 0, OUT), P(9, 0, OUT), P(16, 0, OUT), P(17, 0, OUT),
-        P(24, 2, OUT), P(25, 2, OUT),
-        Box(6, 25, 4, 7, H),
-        P(10, 4, Hh), P(11, 4, Hh), P(16, 4, Hh), P(17, 4, Hh),
-        Box(6, 9, 8, 9, H),
-        Box(22, 25, 8, 9, H),
+        P(8, 0, OUT), P(14, 0, OUT), P(20, 0, OUT), P(25, 1, OUT),
+        P(7, 1, H), P(9, 1, H), P(13, 1, H), P(15, 1, H),
+        P(19, 1, H), P(21, 1, H), P(24, 2, H),
+        R(6, 25, 3, OUT), Box(7, 24, 4, 7, H), R(7, 24, 7, Hd),
+        P(10, 4, Hh), P(11, 4, Hh), P(16, 3, Hh), P(17, 3, Hh), P(22, 4, Hh),
+        R(7, 10, 8, H), R(22, 24, 8, H),
       ];
     case 3: { // 寸头
       const buzz = mixHex(H, S, 0.3);
       return [
-        Box(8, 23, 2, 3, OUT),
-        Box(6, 25, 4, 7, buzz),
-        Box(6, 7, 6, 7, OUT),
-        Box(24, 25, 6, 7, OUT),
+        R(9, 22, 3, OUT), P(8, 4, OUT), P(23, 4, OUT),
+        R(7, 24, 5, buzz), R(6, 25, 6, buzz), R(7, 24, 7, Hd),
+        P(9, 5, Hh), P(13, 5, Hh), P(17, 5, Hh), P(21, 5, Hh),
       ];
     }
     case 4: // 侧分
       return [
-        Box(8, 23, 0, 1, OUT),
-        Box(6, 25, 2, 3, H),
-        Box(6, 19, 4, 5, H),
-        Box(22, 25, 4, 5, H),
-        Box(6, 15, 6, 7, H),
-        Box(8, 13, 2, 3, Hh),
-        Box(6, 9, 8, 9, H),
-        Box(24, 25, 6, 9, H),
+        R(9, 23, 0, OUT), P(8, 1, OUT), C(6, 2, 7, OUT), C(25, 2, 8, OUT),
+        Box(7, 24, 1, 5, H), R(7, 18, 6, H), R(7, 14, 7, Hd),
+        R(9, 15, 2, Hh), R(8, 12, 3, Hh),
+        R(7, 10, 8, H), R(23, 24, 7, H), P(24, 9, H),
       ];
     case 5: // 锅盖头（刘海到眉上）
       return [
-        Box(8, 23, 0, 1, OUT),
-        Box(6, 25, 2, 7, H),
-        Box(6, 9, 8, 9, H),
-        Box(22, 25, 8, 9, H),
-        Box(8, 15, 2, 3, Hh),
-        Box(6, 9, 10, 11, H),
-        Box(22, 25, 10, 11, H),
+        R(9, 22, 0, OUT), P(7, 1, OUT), P(8, 1, OUT), P(23, 1, OUT), P(24, 1, OUT),
+        Box(6, 25, 2, 7, H), R(7, 24, 8, Hd),
+        R(8, 14, 2, Hh), R(9, 13, 3, Hh),
+        R(6, 10, 9, H), R(21, 25, 9, H), P(7, 10, H), P(24, 10, H),
       ];
     case 6: // 爆炸头
       return [
-        Box(8, 23, 0, 1, H),
-        Box(4, 27, 2, 7, H),
-        C(4, 8, 11, H), C(5, 8, 11, H),
-        C(26, 8, 11, H), C(27, 8, 11, H),
-        P(10, 2, Hh), P(11, 2, Hh), P(18, 4, Hh), P(19, 4, Hh),
-        P(24, 2, Hh), P(25, 2, Hh), P(6, 6, Hh), P(7, 6, Hh),
+        R(9, 22, 0, H), R(6, 25, 1, H), R(4, 27, 3, H),
+        Box(3, 28, 4, 7, H), C(4, 8, 11, H), C(27, 8, 11, H),
+        P(5, 2, H), P(8, 2, H), P(14, 2, H), P(19, 2, H), P(24, 2, H), P(27, 2, H),
+        P(7, 3, Hh), P(12, 1, Hh), P(17, 4, Hh), P(23, 2, Hh), P(26, 5, Hh),
+        P(5, 7, Hd), P(10, 5, Hd), P(21, 6, Hd), P(27, 8, Hd),
       ];
     case 7: // 短卷
       return [
-        Box(8, 11, 2, 3, H), Box(14, 17, 2, 3, H), Box(20, 23, 2, 3, H),
-        Box(6, 25, 4, 7, H),
-        P(10, 4, Hh), P(11, 4, Hh), P(18, 4, Hh), P(19, 4, Hh),
-        P(24, 4, Hh), P(25, 4, Hh),
-        Box(6, 9, 8, 9, H),
-        Box(22, 25, 8, 9, H),
+        R(9, 12, 1, H), R(15, 18, 1, H), R(21, 24, 1, H),
+        R(7, 10, 3, H), R(12, 16, 3, H), R(18, 22, 3, H), R(24, 25, 3, H),
+        Box(6, 25, 4, 7, H), R(7, 24, 7, Hd),
+        P(10, 4, Hh), P(15, 2, Hh), P(19, 4, Hh), P(24, 2, Hh),
+        R(7, 10, 8, H), R(22, 24, 8, H),
       ];
     case 8: { // 光头渐层
       const fade = mixHex(H, S, 0.45);
       const gloss = mixHex(S, "#ffffff", 0.3);
       return [
-        Box(8, 23, 4, 5, OUT),
-        C(6, 6, 11, fade), C(7, 6, 11, fade),
-        C(24, 6, 11, fade), C(25, 6, 11, fade),
-        Box(12, 15, 4, 5, gloss),
+        R(9, 22, 4, fade), P(8, 5, fade), P(23, 5, fade),
+        C(6, 7, 11, fade), C(25, 7, 11, fade),
+        R(12, 16, 5, gloss), P(11, 6, gloss),
       ];
     }
     case 9: // 90s 长发
       return [
-        Box(8, 23, 0, 1, OUT),
-        Box(6, 25, 2, 7, H),
-        C(4, 6, 17, H), C(5, 6, 17, H),
-        C(26, 6, 17, H), C(27, 6, 17, H),
-        P(4, 18, OUT), P(5, 18, OUT), P(26, 18, OUT), P(27, 18, OUT),
-        Box(8, 13, 2, 3, Hh),
+        R(9, 22, 0, OUT), P(7, 1, OUT), P(8, 1, OUT), P(23, 1, OUT), P(24, 1, OUT),
+        Box(6, 25, 2, 7, H), C(4, 6, 17, H), C(5, 7, 18, Hd),
+        C(26, 7, 18, Hd), C(27, 6, 17, H),
+        P(4, 18, OUT), P(5, 19, OUT), P(26, 19, OUT), P(27, 18, OUT),
+        R(9, 15, 2, Hh), R(8, 12, 3, Hh),
       ];
     default:
       return [Box(6, 25, 4, 5, "#26221f")];
@@ -413,57 +399,118 @@ function hairCells(styleId, H, Hh, S) {
 /** 眉+眼+嘴（心情决定）；锅盖头(5)刘海压到眉线，一律用平眉防穿模 */
 function faceCells(mood, look, styleId) {
   const browColor = mixHex(look.hairHex, OUT, look.darkSkin ? 0.3 : 0.55);
+  const cheek = mixHex(look.skin, "#b85c55", look.darkSkin ? 0.12 : 0.22);
+  const face = look.face || { eyeStyle: 0, browStyle: 0, mouthStyle: 0, noseStyle: 0, gaze: 0 };
   const flatOnly = styleId === 5;
   const parts = [];
 
-  // —— 眉毛（双行厚眉）——
-  if (flatOnly || mood === "happy" || mood === "tired") {
-    parts.push(Box(8, 11, 10, 11, browColor), Box(20, 23, 10, 11, browColor));
+  // —— 眉毛：状态负责情绪，种子负责普通状态下的天生眉形 ——
+  if (mood === "happy") {
+    parts.push(R(10, 13, 9, browColor), R(18, 21, 9, browColor));
+  } else if (mood === "tired") {
+    parts.push(R(9, 13, 11, browColor), R(18, 22, 11, browColor));
   } else if (mood === "sad") {
     // 垂眉：外低内高
-    parts.push(Box(12, 13, 8, 9, browColor), Box(10, 11, 10, 11, browColor), Box(8, 9, 10, 11, browColor));
-    parts.push(Box(18, 19, 8, 9, browColor), Box(20, 21, 10, 11, browColor), Box(22, 23, 10, 11, browColor));
+    parts.push(P(9, 10, browColor), R(10, 11, 9, browColor), R(12, 13, 8, browColor));
+    parts.push(R(18, 19, 8, browColor), R(20, 21, 9, browColor), P(22, 10, browColor));
+  } else if (mood === "injured") {
+    parts.push(R(9, 12, 10, browColor), R(19, 22, 9, browColor));
+  } else if (flatOnly || face.browStyle === 0) {
+    // 平静直眉
+    parts.push(R(9, 13, 9, browColor), R(18, 22, 9, browColor));
+  } else if (face.browStyle === 1) {
+    // 专注眉：只有一格倾斜，不再是旧版统一怒眉
+    parts.push(R(9, 11, 9, browColor), R(12, 13, 10, browColor));
+    parts.push(R(20, 22, 9, browColor), R(18, 19, 10, browColor));
+  } else if (face.browStyle === 2) {
+    // 轻扬眉
+    parts.push(P(9, 9, browColor), R(10, 12, 8, browColor), P(13, 9, browColor));
+    parts.push(P(18, 9, browColor), R(19, 21, 8, browColor), P(22, 9, browColor));
   } else {
-    // 热血怒眉：外高内低
-    parts.push(Box(8, 11, 8, 9, browColor), Box(12, 13, 10, 11, browColor));
-    parts.push(Box(20, 23, 8, 9, browColor), Box(18, 19, 10, 11, browColor));
+    // 短眉，观感更年轻友善
+    parts.push(R(10, 13, 9, browColor), R(18, 21, 9, browColor));
   }
 
-  // —— 眼睛（2×2 白 + 瞳）——
+  // 普通眼睛：四种眼型 + 三种目光方向；两眼始终同步，避免斜视感。
+  const openEyes = () => {
+    const lp = Math.max(10, Math.min(12, 11 + face.gaze));
+    const rp = lp + 9;
+    if (face.eyeStyle === 1) {
+      // 圆眼
+      parts.push(R(10, 12, 11, EYE), P(9, 12, EYE), P(13, 12, EYE), R(10, 12, 13, EYE));
+      parts.push(R(19, 21, 11, EYE), P(18, 12, EYE), P(22, 12, EYE), R(19, 21, 13, EYE));
+      parts.push(R(10, 12, 12, EYEWHITE), R(19, 21, 12, EYEWHITE), P(lp, 12, EYE), P(rp, 12, EYE));
+    } else if (face.eyeStyle === 2) {
+      // 细长眼，但保持水平眼线，避免眯眼坏笑
+      parts.push(R(9, 13, 12, EYE), R(10, 12, 13, EYEWHITE), P(lp, 13, EYE));
+      parts.push(R(18, 22, 12, EYE), R(19, 21, 13, EYEWHITE), P(rp, 13, EYE));
+    } else if (face.eyeStyle === 3) {
+      // 柔和短眼
+      const lp2 = Math.max(10, Math.min(12, lp));
+      const rp2 = lp2 + 9;
+      parts.push(R(10, 13, 11, EYE), R(10, 12, 12, EYEWHITE), P(lp2, 12, EYE));
+      parts.push(R(18, 21, 11, EYE), R(19, 21, 12, EYEWHITE), P(rp2, 12, EYE));
+    } else {
+      // 标准开眼
+      parts.push(R(9, 13, 11, EYE), R(10, 12, 12, EYEWHITE), P(lp, 12, EYE));
+      parts.push(R(18, 22, 11, EYE), R(19, 21, 12, EYEWHITE), P(rp, 12, EYE));
+    }
+  };
+
+  // —— 眼睛：伤病 / 疲惫覆盖天生眼型，其余状态保留个人差异 ——
   if (mood === "injured") {
     // 左眼闭合线 + 右眼正常 + 淤青
-    parts.push(Box(10, 13, 12, 13, EYE));
-    parts.push(Box(20, 21, 12, 13, EYEWHITE), Box(18, 19, 12, 13, EYE));
-    parts.push(Box(20, 21, 14, 15, "#a15b50"));
+    parts.push(R(9, 13, 12, EYE), P(10, 11, EYE), P(12, 13, EYE));
+    parts.push(R(18, 22, 12, EYE), R(19, 21, 13, EYEWHITE), P(19, 13, EYE));
+    parts.push(P(21, 14, "#a15b50"), P(22, 14, "#8f4a48"));
   } else if (mood === "tired") {
-    parts.push(Box(10, 13, 12, 13, EYE), Box(18, 21, 12, 13, EYE));
-    parts.push(Box(24, 25, 8, 9, "#8fd7f2"), Box(24, 25, 10, 11, "#5db6dc"));
+    parts.push(R(9, 13, 12, EYE), R(18, 22, 12, EYE));
+    parts.push(P(24, 8, "#b7ecff"), P(24, 9, "#8fd7f2"), P(25, 10, "#5db6dc"));
+  } else if (mood === "happy" && face.eyeStyle % 2 === 0) {
+    // 一半球员开心时眯成上扬弧线，另一半仍保留开眼笑
+    parts.push(P(9, 12, EYE), R(10, 12, 13, EYE), P(13, 12, EYE));
+    parts.push(P(18, 12, EYE), R(19, 21, 13, EYE), P(22, 12, EYE));
   } else {
-    // 左眼：白-瞳，右眼：瞳-白（外亮内深）
-    parts.push(Box(10, 11, 12, 13, EYEWHITE), Box(12, 13, 12, 13, EYE));
-    parts.push(Box(18, 19, 12, 13, EYE), Box(20, 21, 12, 13, EYEWHITE));
+    openEyes();
   }
 
-  // —— 鼻（小竖影）——
-  parts.push(Box(14, 15, 14, 15, look.skinShade));
-
-  // —— 嘴 ——
-  if (mood === "happy") {
-    parts.push(Box(10, 21, 16, 17, OUT));
-    parts.push(Box(12, 19, 16, 17, "#fdf6ea"));
-    parts.push(Box(12, 19, 18, 19, OUT));
-    parts.push(Box(8, 9, 14, 15, "#d98a6a"), Box(22, 23, 14, 15, "#d98a6a"));
-  } else if (mood === "sad" || mood === "injured") {
-    parts.push(Box(14, 17, 16, 17, MOUTH));
-    parts.push(Box(12, 13, 18, 19, MOUTH), Box(18, 19, 18, 19, MOUTH));
+  // —— 三种小鼻型；去掉旧版横向三格鼻影，避免像胡子 ——
+  if (face.noseStyle === 1) {
+    parts.push(P(15, 14, look.skinShade), P(15, 15, look.skinShade), P(16, 16, look.skinShade));
+  } else if (face.noseStyle === 2) {
+    parts.push(P(16, 14, look.skinShade), P(16, 15, look.skinShade), P(15, 16, look.skinShade));
   } else {
-    parts.push(Box(14, 19, 16, 17, MOUTH));
+    parts.push(P(16, 15, look.skinShade), P(15, 16, look.skinShade));
+  }
+
+  // —— 嘴：状态决定情绪，neutral 仍有四种自然嘴型 ——
+  if (mood === "happy") {
+    if (face.mouthStyle % 2 === 0) {
+      parts.push(P(11, 17, OUT), R(12, 19, 18, OUT), P(20, 17, OUT));
+      parts.push(R(13, 18, 18, "#fdf6ea"), R(14, 17, 19, MOUTH));
+    } else {
+      parts.push(P(12, 18, MOUTH), R(13, 18, 19, MOUTH), P(19, 18, MOUTH));
+    }
+    parts.push(P(9, 16, cheek), P(22, 16, cheek));
+  } else if (mood === "sad" || mood === "injured") {
+    parts.push(R(14, 17, 17, MOUTH), P(13, 18, MOUTH), P(18, 18, MOUTH));
+  } else if (face.mouthStyle === 1) {
+    // 很轻的友善弧线
+    parts.push(P(13, 18, MOUTH), R(14, 17, 19, MOUTH), P(18, 18, MOUTH));
+  } else if (face.mouthStyle === 2) {
+    // 坚定的短直嘴
+    parts.push(R(14, 17, 18, OUT));
+  } else if (face.mouthStyle === 3) {
+    // 略张嘴，但保持居中对称
+    parts.push(R(14, 17, 18, OUT), R(15, 16, 19, MOUTH));
+  } else {
+    parts.push(R(14, 17, 18, MOUTH));
   }
 
   // —— 受伤绷带 ——
   if (mood === "injured") {
-    parts.push(Box(8, 23, 4, 5, "#e8e4da"));
-    parts.push(Box(6, 7, 6, 7, "#e8e4da"), Box(24, 25, 4, 5, "#d4cfc2"));
+    parts.push(R(8, 23, 5, "#e8e4da"), R(10, 21, 6, "#d4cfc2"));
+    parts.push(P(7, 6, "#e8e4da"), P(24, 5, "#d4cfc2"));
   }
   return parts;
 }
@@ -472,23 +519,20 @@ function faceCells(mood, look, styleId) {
 function headCells(look) {
   const S = look.skin;
   const Sd = look.skinShade;
+  const Sh = mixHex(S, "#fff7ed", 0.18);
   return [
-    // 顶描边
-    Box(8, 23, 4, 5, OUT),
-    // 侧描边
-    Box(6, 7, 6, 19, OUT),
-    Box(24, 25, 6, 19, OUT),
-    // 下颚描边
-    Box(8, 11, 20, 21, OUT),
-    Box(20, 23, 20, 21, OUT),
-    // 脸填充
-    Box(8, 23, 6, 19, S),
-    // 耳
-    Box(6, 7, 12, 13, S),
-    Box(24, 25, 12, 13, S),
-    // 下颚阴影
-    Box(8, 9, 18, 19, Sd),
-    Box(22, 23, 18, 19, Sd),
+    // 一格描边 + 阶梯式下颚，轮廓比旧版更圆润清楚
+    R(9, 22, 3, OUT), R(7, 24, 4, OUT),
+    P(6, 5, OUT), P(25, 5, OUT), C(6, 6, 18, OUT), C(25, 6, 18, OUT),
+    P(5, 11, OUT), C(4, 12, 15, OUT), P(5, 16, OUT),
+    P(26, 11, OUT), C(27, 12, 15, OUT), P(26, 16, OUT),
+    P(7, 19, OUT), P(24, 19, OUT), R(8, 10, 20, OUT), R(21, 23, 20, OUT),
+    P(11, 21, OUT), P(20, 21, OUT),
+    // 脸、耳朵与下颚
+    Box(7, 24, 5, 18, S), R(8, 23, 19, S), R(11, 20, 20, S),
+    C(5, 12, 15, S), C(26, 12, 15, S), P(5, 14, Sd), P(26, 14, Sd),
+    R(8, 10, 18, Sd), R(21, 23, 18, Sd), P(10, 19, Sd), P(21, 19, Sd),
+    R(9, 13, 6, Sh), P(8, 7, Sh),
   ];
 }
 
@@ -647,7 +691,7 @@ const pngCache = new Map();
 const PNG_CACHE_MAX = 800;
 
 /**
- * 渲染像素头像 PNG data-URI（canvas 整数设备像素，绝对硬边）。
+ * 渲染像素头像 PNG data-URI（canvas 内部保持整数 cell，显示层可平滑缩小）。
  * 仅浏览器可用；无 DOM 时返回 null（调用方回退 SVG）。
  */
 export function renderAvatarPngUri(opts = {}) {
@@ -669,9 +713,9 @@ export function renderAvatarPngUri(opts = {}) {
   const hit = pngCache.get(key);
   if (hit) return hit;
 
-  // 每格整数设备像素：k = round(目标设备尺寸/32)，canvas = 32k 正方形
-  // 小尺寸 UI（16–24px）至少 k=1，避免过度上采样糊掉
-  const k = Math.max(1, Math.round((size * dpr) / GRID));
+  // 至少生成 64px 源图再交给浏览器缩小：小头像的单格轮廓不会因 28/30px
+  // 这类非整数比例被放大成不均匀方块，高分屏仍按整数 cell 绘制。
+  const k = Math.max(2, Math.ceil((size * dpr) / GRID));
   const px = GRID * k;
   const canvas = document.createElement("canvas");
   canvas.width = px;
@@ -726,7 +770,7 @@ export function avatarHtml(person, opts = {}) {
     size,
     mood,
   };
-  // 首选 canvas-PNG（任何缩放/合成下都硬边）；无 DOM 回退 SVG
+  // 首选高分辨率 canvas-PNG；无 DOM 时回退 SVG
   const pngUri = renderAvatarPngUri(renderOpts);
   const inner = pngUri
     ? `<img class="avatar-px" src="${pngUri}" width="${size}" height="${size}" alt="" draggable="false">`
